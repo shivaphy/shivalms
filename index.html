@@ -334,7 +334,7 @@ tr:hover td{background:var(--s2)}
 
 //    Data                                                          
 var APP   = "Shiva's Pro Learning LMS";
-var GKEYS = ['gemini-2.0-flash-001','gemini-1.5-flash-001','gemini-1.5-flash-002','gemini-2.0-flash-lite-001'];
+var GKEYS = ['gemini-2.0-flash','gemini-2.0-flash-lite','gemini-1.5-flash-8b','gemini-1.5-pro'];
 
 // Shared rate-limit countdown — shows a live timer in any element
 function showRateLimitCountdown(el, seconds, onDone){
@@ -633,7 +633,9 @@ async function callAI(prompt, elId, done){
         await new Promise(function(res){setTimeout(res,2000);});
         continue;
       }
-      // Any other error — show exact Google message and stop
+      // 404 = model not available for this key — try next model
+      if(r.status===404){lastErr='model unavailable';continue;}
+      // Any other hard error — stop and report
       lastErr='HTTP '+r.status+(googleMsg?' — '+googleMsg.slice(0,120):'');
       break;
     }catch(ex){lastErr='Network error: '+ex.message; break;}
@@ -3360,18 +3362,22 @@ async function testKey(){
         await new Promise(function(res2){setTimeout(res2,1500);});
         continue;
       }
-      // Non-rate-limit error — this is the REAL problem
-      showRes('&#x274C; <b>Error on '+GKEYS[i]+':</b><br>'
-        +gm+'<br><br>'
-        +'<b>Fix:</b> Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#1D4ED8">aistudio.google.com/app/apikey</a>, '
-        +'create a <b>new API key</b> (unrestricted), paste it above and click Save Key.',false);
+      // 404 = model not available for this key — try next silently
+      if(r.status===404){
+        await new Promise(function(res2){setTimeout(res2,200);});
+        continue;
+      }
+      // Any other hard error — this is the real problem, show it
+      showRes('&#x274C; <b>Error '+r.status+' on '+GKEYS[i]+':</b><br>'+gm+'<br><br>'
+        +'<b>Fix:</b> Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#1D4ED8">aistudio.google.com/app/apikey</a> '
+        +'and create a new unrestricted API key.',false);
       return;
     }catch(e){
       showRes('&#x274C; <b>Network error:</b> '+e.message+'<br>Check your internet connection.',false);
       return;
     }
   }
-  showRes('&#x26A0; All models rate limited right now. Your key IS valid.<br>Wait 60 seconds and click Test Connection again.',true);
+  showRes('&#x26A0; All models tried. Either rate limited or not available for your key.<br>Try creating a fresh API key at <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#1D4ED8">aistudio.google.com/app/apikey</a>',true);
 }
 
 //    PDF                                                            
