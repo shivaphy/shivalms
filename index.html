@@ -1622,7 +1622,7 @@ function renderStuBoost(){
       h+='<div><div style="font-size:13px;font-weight:600">'+a.topic+'</div>';
       h+='<div style="font-size:11px;color:var(--mx)">'+a.sub+' | '+a.co+' | L'+a.bl+' | By '+a.byNm+'</div></div>';
       h+='<button class="btn btn-p btn-sm" id="open-act-'+i+'">Open</button></div>';
-      h+='<div style="font-size:12px;color:var(--mx)">'+a.content.slice(0,180)+'...</div></div>';
+      h+='</div>';  // no content preview — keeps list clean
     });
   }
   h+='</div></div>';
@@ -1680,13 +1680,44 @@ function openSharedAct(act){
   var blNum=parseInt(act.bl)||3;
   bTutorCtx={topic:act.topic,sub:act.sub||'',co:act.co||'CO1',bl:blNum,blLabel:blLabels[blNum]||'Apply',ia:act.ia||'',history:[]};
   var panel=document.getElementById('shared-acts-list'); if(!panel)return;
-  var h='<button class="btn btn-o btn-sm" onclick="renderStuBoost()">\u2190 Back to List</button>';
-  h+='<div style="margin:10px 0 6px;font-size:13px;font-weight:600">'+act.topic+'</div>';
-  h+='<div style="font-size:12px;color:var(--mx);margin-bottom:10px">'+act.sub+' | '+act.co+' | Bloom L'+blNum+' '+blLabels[blNum]+' | Shared by '+act.byNm+'</div>';
-  h+='<div style="background:var(--sf);border:1px solid var(--bd);border-radius:9px;padding:12px;font-size:12px;line-height:1.7;max-height:340px;overflow-y:auto" id="shared-act-body"></div>';
-  h+='<div style="margin-top:10px"><button class="btn btn-p btn-sm" id="start-writing-btn">\u270f Start Writing</button></div>';
+
+  // Scaffold badge colours
+  var blColors=['','#FEF9C3','#DBEAFE','#DCFCE7','#EDE9FE','#FEE2E2','#F0FDF4'];
+  var blTextColors=['','#854D0E','#1D4ED8','#15803D','#6D28D9','#DC2626','#15803D'];
+
+  var h='<button class="btn btn-o btn-sm" style="margin-bottom:12px" onclick="renderStuBoost()">\u2190 Back</button>';
+
+  // Clean topic card — no content shown
+  h+='<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:14px;margin-bottom:12px">';
+  h+='<div style="font-size:15px;font-weight:700;color:#14532D;margin-bottom:6px">'+act.topic+'</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">';
+  h+='<span style="background:#DCFCE7;color:#15803D;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px">'+act.sub+'</span>';
+  h+='<span style="background:#DBEAFE;color:#1D4ED8;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px">'+act.co+'</span>';
+  h+='<span style="background:'+(blColors[blNum]||'#F3F4F6')+';color:'+(blTextColors[blNum]||'#374151')+';font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px">Bloom L'+blNum+' \u2014 '+blLabels[blNum]+'</span>';
+  if(act.ia)h+='<span style="background:#FEF3C7;color:#92400E;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px">'+act.ia+'</span>';
+  h+='</div>';
+  h+='<div style="font-size:11px;color:#166534">Shared by '+act.byNm+'</div>';
+  h+='</div>';
+
+  // Scaffold guidance — brief, icon-driven, no full AI content
+  h+='<div style="background:#F8FAFC;border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:12px">';
+  h+='<div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--tx)">\ud83d\udca1 How to work on this:</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--mx)">';
+  h+='<div>1\ufe0f\u20e3 Read the topic above and think about what you already know.</div>';
+  h+='<div>2\ufe0f\u20e3 Type your initial response in the <strong>My Work Area</strong> text box.</div>';
+  h+='<div>3\ufe0f\u20e3 Use <strong>HINT</strong> if you are stuck, <strong>BUILD</strong> to get a framework.</div>';
+  h+='<div>4\ufe0f\u20e3 Use <strong>CHECK</strong> or <strong>Get Feedback</strong> once you have written something.</div>';
+  h+='</div></div>';
+
+  // Collapsible — full activity content hidden by default
+  h+='<details style="border:1px solid var(--bd);border-radius:9px;overflow:hidden">';
+  h+='<summary style="padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;background:var(--s2);list-style:none;display:flex;align-items:center;gap:6px">';
+  h+='<span>\ud83d\udccc</span> View Full Activity Instructions (optional)</summary>';
+  h+='<div style="padding:12px 14px;font-size:12px;line-height:1.8;color:var(--tx);white-space:pre-wrap;max-height:320px;overflow-y:auto">'+act.content+'</div>';
+  h+='</details>';
+
+  h+='<div style="margin-top:12px"><button class="btn btn-p" style="width:100%;justify-content:center" id="start-writing-btn">\u270f\ufe0f Start Writing</button></div>';
   panel.innerHTML=h;
-  var body=document.getElementById('shared-act-body'); if(body)body.textContent=act.content;
   var tEl=document.getElementById('work-area-topic');
   if(tEl){tEl.innerHTML='<div style="font-size:13px;font-weight:600;color:#15803D">'+(act.sub+(act.ia?' \u00a0'+act.ia:''))+'</div><div style="font-size:11px;color:#166534">'+act.co+' | Bloom L'+blNum+' '+blLabels[blNum]+' \u2014 '+act.topic+'</div>';}
   var tsEl=document.getElementById('tutor-status'); if(tsEl)tsEl.textContent='Active topic: '+act.topic;
