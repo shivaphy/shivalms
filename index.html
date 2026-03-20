@@ -478,6 +478,15 @@ function doLogin(){
     if(USERS[i].em===em && USERS[i].pw===pw){u=USERS[i];break;}
   }
   if(!u){errEl.textContent='Invalid email or password.';errEl.style.display='block';return;}
+  // Enforce portal role match
+  var allowedRoles={admin:['admin'],faculty:['faculty','admin'],student:['student']};
+  if(!allowedRoles[SELECTED_ROLE]||allowedRoles[SELECTED_ROLE].indexOf(u.role)===-1){
+    var portalName=SELECTED_ROLE.charAt(0).toUpperCase()+SELECTED_ROLE.slice(1);
+    var userPortal=u.role.charAt(0).toUpperCase()+u.role.slice(1);
+    errEl.textContent='These credentials belong to the '+userPortal+' portal. Please select the '+userPortal+' tab above.';
+    errEl.style.display='block';
+    return;
+  }
   if(u.st==='pending'){errEl.textContent='Account pending admin approval.';errEl.style.display='block';return;}
   if(u.st==='suspended'){errEl.textContent='Account suspended. Contact admin.';errEl.style.display='block';return;}
   // Login success
