@@ -336,6 +336,52 @@ tr:hover td{background:var(--s2)}
 var APP   = "Shiva's Pro Learning LMS";
 var GKEYS = ['gemini-2.5-flash','gemini-2.5-flash-lite','gemini-2.5-pro'];
 
+// Shared rate-limit countdown — shows a live timer in any element
+function showRateLimitCountdown(el, seconds, onDone){
+  if(!el) return;
+  seconds = seconds || 60;
+  var remaining = seconds;
+  var radius = 18, circ = Math.round(2 * Math.PI * radius);
+  function buildHTML(s){
+    var pct = s / seconds;
+    var dash = Math.round(circ * pct);
+    var col = s > 30 ? '#F59E0B' : s > 10 ? '#EF4444' : '#DC2626';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;'
+      +'background:#FEF3C7;border:1px solid #FDE68A;border-radius:9px;margin:4px 0">'
+      +'<svg width="44" height="44" viewBox="0 0 44 44">'
+      +'<circle cx="22" cy="22" r="'+radius+'" fill="none" stroke="#E5E7EB" stroke-width="4"/>'
+      +'<circle cx="22" cy="22" r="'+radius+'" fill="none" stroke="'+col+'" stroke-width="4"'
+      +' stroke-dasharray="'+dash+' '+circ+'"'
+      +' stroke-dashoffset="0" stroke-linecap="round"'
+      +' transform="rotate(-90 22 22)"/>'
+      +'<text x="22" y="27" text-anchor="middle" font-size="13" font-weight="700" fill="'+col+'">'+s+'</text>'
+      +'</svg>'
+      +'<div>'
+      +'<div style="font-size:12px;font-weight:600;color:#92400E">&#x23F1; Rate limited — retrying in '+s+'s</div>'
+      +'<div style="font-size:11px;color:#B45309">Gemini free tier: up to 10 requests/min. Ready soon!</div>'
+      +'</div></div>';
+  }
+  el.innerHTML = buildHTML(remaining);
+  var tid = setInterval(function(){
+    remaining--;
+    if(remaining <= 0){
+      clearInterval(tid);
+      el.innerHTML = '<div style="color:#15803D;font-size:12px;font-weight:600">'
+        +'&#x2705; Ready! Click Generate again.</div>';
+      if(onDone) onDone();
+    } else {
+      var svg = el.querySelector('svg');
+      var circ2 = Math.round(2 * Math.PI * radius);
+      var dash = Math.round(circ2 * remaining / seconds);
+      var col = remaining > 30 ? '#F59E0B' : remaining > 10 ? '#EF4444' : '#DC2626';
+      var circles = el.querySelectorAll('circle');
+      if(circles[1]){ circles[1].setAttribute('stroke-dasharray', dash+' '+circ2); circles[1].setAttribute('stroke', col); }
+      var txt = el.querySelector('text'); if(txt) txt.textContent = remaining; txt && txt.setAttribute('fill', col);
+      var lbl = el.querySelector('div > div'); if(lbl) lbl.textContent = '\u23F1 Rate limited \u2014 retrying in '+remaining+'s';
+    }
+  }, 1000);
+}
+
 var CU    = null;   // current user
 var mats  = [];     // materials created
 var vlabs = [];     // virtual labs
@@ -581,7 +627,11 @@ async function callAI(prompt, elId, done){
       err='Error '+r.status;
     }catch(ex){err=ex.message;}
   }
-  el.innerHTML='<div style="color:#DC2626">AI Error: '+err+'</div>';
+  if(err==='Rate limited'){
+    showRateLimitCountdown(el, 60);
+  } else {
+    el.innerHTML='<div style="color:#DC2626">AI Error: '+err+'</div>';
+  }
 }
 
 //                                                                   
@@ -1973,7 +2023,9 @@ async function aiAssessStudent(uid){
       break;
     }catch(e){break;}
   }
-  if(!responded)el.innerHTML='<div style="margin-top:12px;color:var(--mx);font-size:12px">Rate limited. Wait 60 seconds and try again.</div>';
+  if(!responded){
+    showRateLimitCountdown(el, 60);
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3104,7 +3156,10 @@ async function streamChat(prompt,scaffoldType){
       break;
     }catch(e){break;}
   }
-  if(!responded){th.className='msg msg-a';th.textContent='Rate limited. Wait 60 seconds and try again.';}
+  if(!responded){
+    th.className='msg msg-a';
+    showRateLimitCountdown(th, 60);
+  }
   area.scrollTop=area.scrollHeight;
 }
 
