@@ -616,7 +616,7 @@ async function callAI(prompt, elId, done, _retryCount){
     try{
       var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GKEYS[i]+':generateContent?key='+key,{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:8000,temperature:0.7}})
+        body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:4096,temperature:0.7}})
       });
       if(r.ok){
         var d=await r.json();
@@ -625,12 +625,19 @@ async function callAI(prompt, elId, done, _retryCount){
       }
       if(r.status===429){
         rateLimited=true; err='Rate limited';
-        // Stagger: wait longer between each model attempt
         await new Promise(function(res){setTimeout(res, 3000*(i+1));});
         continue;
       }
-      if(r.status===400||r.status===403){err='Invalid API key ('+r.status+')';break;}
-      err='AI Error '+r.status;
+      if(r.status===400){
+        var e400=await r.json().catch(function(){return {};});
+        var msg400=(e400.error&&e400.error.message)||'Bad request';
+        err='Bad request: '+msg400.slice(0,120);
+        break;
+      }
+      if(r.status===403){err='API key does not have permission. Check key restrictions at aistudio.google.com';break;}
+      if(r.status===404){err='Model not found. Your API key may not have access to this model.';break;}
+      if(r.status===503){err='Gemini service temporarily unavailable. Try again in a minute.';break;}
+      err='Error '+r.status;
     }catch(ex){err=ex.message;}
   }
   if(rateLimited && _retryCount < 2){
@@ -644,7 +651,14 @@ async function callAI(prompt, elId, done, _retryCount){
       +'The Gemini free tier allows ~10 requests/minute. '
       +'Please wait 2-3 minutes before generating again, or use a different Gemini API key.</div>';
   } else {
-    el.innerHTML='<div style="color:#DC2626">AI Error: '+err+'</div>';
+    el.innerHTML='<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:10px;font-size:12px">'
+      +'<div style="color:#DC2626;font-weight:600;margin-bottom:4px">&#x26A0; AI Error</div>'
+      +'<div style="color:#7F1D1D;margin-bottom:8px">'+err+'</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      +'<button class="btn btn-o btn-sm" onclick="this.closest(\'.ai-out\')?this.closest(\'.ai-out\').innerHTML=\'Fill the form and click Generate.\':\'\'">'
+      +'&#x21BA; Clear</button>'
+      +'<button class="btn btn-o btn-sm" onclick="nav(\'settings\')">&#x2699; Check API Key</button>'
+      +'</div></div>';
   }
 }
 
@@ -3268,7 +3282,8 @@ function renderSettings(){
     h+='<div class="divider"></div><div class="stl">&#x1F916; AI Configuration</div>';
     h+='<div id="ai-status-box" style="padding:8px 12px;border-radius:7px;margin-bottom:10px;font-size:12px"></div>';
     h+='<div class="fg"><label>Gemini API Key <span style="font-size:10px;color:var(--mx)">(for AI text generation)</span></label><input id="gem-inp" type="password" placeholder="AIzaSy..."/></div>';
-    h+='<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-p btn-sm" onclick="saveKey()">Save Key</button><button class="btn btn-r btn-sm" onclick="clearKey()">Clear</button><button class="btn btn-o btn-sm" onclick="testKey()">Test AI</button></div>';
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-p btn-sm" onclick="saveKey()">Save Key</button><button class="btn btn-r btn-sm" onclick="clearKey()">Clear</button><button class="btn btn-o btn-sm" onclick="testKey()">&#x1F50C; Test Connection</button></div>';
+    h+='<div id="test-key-result" style="font-size:11px;margin-top:6px"></div>';
     h+='<p style="font-size:11px;color:var(--mx);margin-top:6px">Free key: <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#1D4ED8">aistudio.google.com/app/apikey</a></p>';
     h+='<div class="divider" style="margin:14px 0"></div>';
     h+='<div class="stl">&#x1F3A7; ElevenLabs TTS Key</div>';
@@ -3335,12 +3350,35 @@ function updateTTSStatus(){
   }
 }
 async function testKey(){
-  var key=getK();if(!key||key.indexOf('AIzaSy')!==0){toast('Save API key first','e');return;}
-  toast('Testing...','i');
-  for(var i=0;i<GKEYS.length;i++){
-    try{var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GKEYS[i]+':generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:'Reply OK'}]}],generationConfig:{maxOutputTokens:10}})});if(r.ok){toast('AI working! Connected: '+GKEYS[i],'s',5000);return;}if(r.status===429){await new Promise(function(res){setTimeout(res,1500);});continue;}if(r.status===400||r.status===403){toast('Invalid key ('+r.status+')','e',6000);return;}}catch(e){toast('Network error','e');return;}
+  var key=getK();
+  var resultEl=document.getElementById('test-key-result');
+  if(!key||key.indexOf('AIzaSy')!==0){
+    toast('Save a Gemini API key first','e');
+    if(resultEl)resultEl.innerHTML='<span style="color:#DC2626">No key saved.</span>';
+    return;
   }
-  toast('Rate limited. Key is valid   wait 60s and retry.','w',6000);
+  toast('Testing connection...','i');
+  if(resultEl)resultEl.innerHTML='<span style="color:#6B7280">&#x23F3; Testing...</span>';
+  for(var i=0;i<GKEYS.length;i++){
+    try{var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GKEYS[i]+':generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:'Reply OK'}]}],generationConfig:{maxOutputTokens:10}})});if(r.ok){
+        toast('\u2705 Connected! '+GKEYS[i]+' is working','s',5000);
+        if(resultEl)resultEl.innerHTML='<span style="color:#15803D;font-weight:600">&#x2705; Success — '+GKEYS[i]+' responded.</span>';
+        return;
+      }if(r.status===429){await new Promise(function(res){setTimeout(res,1500);});continue;}if(r.status===400||r.status===403){
+        var body=await r.json().catch(function(){return {};});
+        var msg=(body.error&&body.error.message)||'HTTP '+r.status;
+        toast('Key error ('+r.status+')','e',6000);
+        if(resultEl)resultEl.innerHTML='<span style="color:#DC2626;font-weight:600">&#x274C; Error '+r.status+':</span><br><span style="color:#7F1D1D">'+msg+'</span>';
+        return;
+      }
+      if(r.status===429){
+        if(resultEl)resultEl.innerHTML='<span style="color:#92400E;font-weight:600">&#x26A0; Rate limited on '+GKEYS[i]+'</span><br><span style="color:#78350F">Trying next model...</span>';
+        await new Promise(function(res){setTimeout(res,1500);});continue;
+      }}catch(e){toast('Network error: '+e.message,'e');if(resultEl)resultEl.innerHTML='<span style="color:#DC2626">Network error: '+e.message+'</span>';return;}
+  }
+  toast('All models tried. If key is new, wait 60s and test again.','w',6000);
+  if(resultEl)resultEl.innerHTML='<span style="color:#92400E;font-weight:600">&#x26A0; Rate limited across all models.</span><br>'
+    +'<span style="color:#78350F">Your key IS valid. Wait 60 seconds then click Test Connection again.</span>';
 }
 
 //    PDF                                                            
