@@ -1054,33 +1054,136 @@ function renderDash(){
   el.innerHTML=h;
 }
 
-// AI Generator
+// ═══════════════════════════════════════════════════════
+// AI GENERATOR — Lesson Plan, Lecture Notes, Rubric,
+//                Quiz, Slides, Worksheet, Podcast
+// ═══════════════════════════════════════════════════════
+var GEN_TAB='Lesson';
+var podcastScript='';
+
 function renderGen(){
   var el=document.getElementById('gen-body'); if(!el)return;
   var gs=['Class 11','Class 12','1st Sem','2nd Sem','3rd Sem','4th Sem','5th Sem','6th Sem','Masters 1st Year'].map(function(g){return '<option>'+g+'</option>';}).join('');
   var ps=['B.E.','MBA','MCA','M.Tech.','B.Sc.','M.Sc.','Class 11-12'].map(function(p){return '<option>'+p+'</option>';}).join('');
+  var tabs=['Lesson Plan','Lecture Notes','Rubric','Quiz','Slides','Worksheet','Podcast'];
   var h='<div class="tabs" id="gen-tabs">';
-  ['Lesson','Quiz','Rubric','Slides','Worksheet'].forEach(function(t,i){h+='<button class="tab'+(i===0?' on':'')+'" onclick="setGenTab(\''+t+'\',this)">'+t+'</button>';});
+  tabs.forEach(function(t,i){
+    var tid=t.replace(' ','');
+    h+='<button class="tab'+(i===0?' on':'')+'" onclick="setGenTab(\''+tid+'\',this)">'+t+'</button>';
+  });
   h+='</div>';
-  h+='<div class="g2"><div class="card"><div class="stl" id="gen-form-title">Lesson Plan Generator</div>';
-  h+='<div class="fg"><label>Topic</label><input id="gen-topic" placeholder="e.g. Digital Electronics"/></div>';
-  h+='<div class="fr"><div class="fg"><label>Grade/Level</label><select id="gen-grade">'+gs+'</select></div><div class="fg"><label>Programme</label><select id="gen-prog">'+ps+'</select></div></div>';
-  h+='<div class="fr"><div class="fg"><label>Duration</label><select id="gen-dur"><option>30 min</option><option selected>45 min</option><option>60 min</option></select></div><div class="fg"><label>Bloom Level</label><select id="gen-bl"><option value="1">L1 Remember</option><option value="2">L2 Understand</option><option value="3" selected>L3 Apply</option><option value="4">L4 Analyze</option><option value="5">L5 Evaluate</option><option value="6">L6 Create</option></select></div></div>';
-  h+='<div class="fg"><label>CO Alignment</label><input id="gen-co" value="CO1"/></div>';
-  h+='<div class="fg"><label>Notes/Objectives</label><textarea id="gen-notes" style="min-height:50px" placeholder="Learning objectives, topics to cover..."></textarea></div>';
-  h+='<button class="btn btn-p" style="width:100%;justify-content:center" onclick="genContent()">Generate with AI</button></div>';
-  h+='<div class="card" style="display:flex;flex-direction:column;gap:8px">';
-  h+='<div style="display:flex;justify-content:space-between;align-items:center"><div class="stl" style="margin:0">AI Output</div><div style="display:flex;gap:5px"><button class="btn btn-o btn-sm" onclick="expGen()">PDF</button><button class="btn btn-p btn-sm" onclick="saveGen()">Save</button></div></div>';
-  h+='<div class="ai-out" id="gen-out" style="flex:1;min-height:320px">Fill the form and click Generate.</div></div></div>';
+
+  // Shared config form (left panel)
+  h+='<div class="g2"><div style="display:flex;flex-direction:column;gap:12px">';
+
+  // Common fields card
+  h+='<div class="card"><div class="stl" id="gen-form-title">&#x1F4DA; Lesson Plan Generator</div>';
+  h+='<div class="fg"><label>Topic</label><input id="gen-topic" placeholder="e.g. Logic Gates and Boolean Algebra"/></div>';
+  h+='<div class="fr"><div class="fg"><label>Grade / Level</label><select id="gen-grade">'+gs+'</select></div>';
+  h+='<div class="fg"><label>Programme</label><select id="gen-prog">'+ps+'</select></div></div>';
+  h+='<div class="fr"><div class="fg"><label>Duration</label><select id="gen-dur"><option>30 min</option><option selected>45 min</option><option>60 min</option><option>90 min</option></select></div>';
+  h+='<div class="fg"><label>Bloom Level</label><select id="gen-bl"><option value="1">L1 Remember</option><option value="2">L2 Understand</option><option value="3" selected>L3 Apply</option><option value="4">L4 Analyze</option><option value="5">L5 Evaluate</option><option value="6">L6 Create</option></select></div></div>';
+  h+='<div class="fr"><div class="fg"><label>CO Alignment</label><input id="gen-co" value="CO1"/></div>';
+  h+='<div class="fg"><label>PO Alignment</label><input id="gen-po" value="PO1,PO2"/></div></div>';
+  h+='<div class="fg"><label>Notes / Objectives</label><textarea id="gen-notes" style="min-height:50px" placeholder="Learning objectives, special instructions..."></textarea></div>';
+  h+='</div>';
+
+  // Lesson Plan extra options (shown for Lesson, Lecture Notes)
+  h+='<div class="card" id="gen-lesson-opts">';
+  h+='<div class="stl">&#x1F4D0; Lesson Plan Options</div>';
+  h+='<div class="fg"><label>Teaching Method</label>';
+  h+='<select id="gen-method"><option>Lecture</option><option>Problem-Based Learning</option><option>Flipped Classroom</option><option>Case Study</option><option>Demonstration</option><option>Socratic Seminar</option></select></div>';
+  h+='<div class="fg"><label>Include Rubric</label>';
+  h+='<select id="gen-with-rubric"><option value="yes">Yes — attach assessment rubric</option><option value="no">No</option></select></div>';
+  h+='<div class="fg"><label>Rubric Type</label>';
+  h+='<select id="gen-rubric-type"><option>Holistic</option><option>Analytic</option><option>Single-Point</option></select></div>';
+  h+='</div>';
+
+  // Lecture Notes extra options
+  h+='<div class="card" id="gen-notes-opts" style="display:none">';
+  h+='<div class="stl">&#x1F4DD; Lecture Notes Options</div>';
+  h+='<div class="fg"><label>Notes Style</label>';
+  h+='<select id="gen-notes-style"><option>Detailed Narrative</option><option>Outline / Bullet Points</option><option>Cornell Notes Format</option><option>Concept Map Style</option></select></div>';
+  h+='<div class="fg"><label>Include</label>';
+  h+='<div style="display:flex;flex-direction:column;gap:5px;padding:4px 0">';
+  [['ln-examples','Worked Examples'],['ln-diagrams','Diagram Descriptions'],['ln-keyterms','Key Terms & Definitions'],['ln-questions','Review Questions at end'],['ln-summary','Chapter Summary Box']].forEach(function(opt){
+    h+='<label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:12px;cursor:pointer"><input type="checkbox" id="'+opt[0]+'" checked style="width:auto"/> '+opt[1]+'</label>';
+  });
+  h+='</div></div>';
+  h+='</div>';
+
+  // Podcast extra options
+  h+='<div class="card" id="gen-podcast-opts" style="display:none">';
+  h+='<div class="stl">&#x1F3A7; Podcast Options</div>';
+  h+='<div class="fg"><label>Language</label>';
+  h+='<select id="gen-podcast-lang">';
+  h+='<option value="en">English (Indian Accent)</option>';
+  INDIAN_LANGS.filter(function(l){return l.code!=="en";}).forEach(function(lg){
+    h+='<option value="'+lg.code+'">'+lg.native+' — '+lg.label+'</option>';
+  });
+  h+='</select></div>';
+  h+='<div class="fg"><label>Format</label>';
+  h+='<select id="gen-podcast-fmt"><option>Solo Explainer (Instructor voice)</option><option>Two Hosts (Q&A dialogue)</option><option>Lecture Recap (Student summary)</option><option>Interview Style (Expert + Host)</option></select></div>';
+  h+='<div class="fg"><label>Episode Length</label>';
+  h+='<select id="gen-podcast-len"><option>5 min (~700 words)</option><option selected>10 min (~1400 words)</option><option>15 min (~2100 words)</option><option>20 min (~2800 words)</option></select></div>';
+  h+='<div class="fg"><label>Tone</label>';
+  h+='<select id="gen-podcast-tone"><option>Conversational & Friendly</option><option>Academic & Formal</option><option>Storytelling & Narrative</option><option>Engaging & Energetic</option></select></div>';
+  h+='</div>';
+
+  h+='<button class="btn btn-p" style="width:100%;justify-content:center" id="gen-main-btn" onclick="genContent()">&#x2728; Generate with AI</button>';
+  h+='</div>'; // left col
+
+  // Right — output panel
+  h+='<div style="display:flex;flex-direction:column;gap:10px">';
+  h+='<div class="card" style="display:flex;flex-direction:column;gap:8px;flex:1">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">';
+  h+='<div class="stl" style="margin:0" id="gen-out-title">Generated Content</div>';
+  h+='<div style="display:flex;gap:5px;flex-wrap:wrap">';
+  h+='<button class="btn btn-o btn-sm" onclick="expGen()">&#x1F4CB; PDF</button>';
+  h+='<button class="btn btn-p btn-sm" onclick="saveGen()">&#x1F4BE; Save</button>';
+  h+='</div></div>';
+  h+='<div class="ai-out" id="gen-out" style="flex:1;min-height:380px;white-space:pre-wrap">Select a tab and click Generate.</div>';
+  h+='</div>';
+
+  // Podcast player panel (hidden until script generated)
+  h+='<div class="card" id="podcast-player-card" style="display:none">';
+  h+='<div class="stl">&#x1F3A7; Podcast Player</div>';
+  h+='<div style="background:#F5F3FF;border-radius:8px;padding:12px;margin-bottom:10px">';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">';
+  h+='<div style="width:44px;height:44px;background:#6D28D9;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px">&#x1F3A7;</div>';
+  h+='<div><div style="font-weight:600" id="podcast-ep-title">Episode</div>';
+  h+='<div style="font-size:11px;color:var(--mx)" id="podcast-ep-meta">Ready to play</div></div></div>';
+  h+='<button class="btn btn-p" style="width:100%;justify-content:center" id="podcast-play-btn" onclick="playPodcast()">&#x25B6; Read Aloud (Browser TTS)</button>';
+  h+='<button class="btn btn-o btn-sm" style="margin-top:6px;width:100%;justify-content:center" onclick="stopPodcast()">&#x23F9; Stop</button>';
+  h+='<div style="font-size:11px;color:var(--mx);margin-top:8px;text-align:center">Uses browser Text-to-Speech. For Indian accent, ensure the selected language voice is installed on your device.</div>';
+  h+='</div></div>';
+
+  h+='</div></div>'; // right col + g2
   el.innerHTML=h;
+  setGenTab('LessonPlan', document.querySelector('#gen-tabs .tab'));
 }
 
-var GEN_TAB='Lesson';
 function setGenTab(t,btn){
   GEN_TAB=t;
   document.querySelectorAll('#gen-tabs .tab').forEach(function(b){b.classList.remove('on');});
   if(btn)btn.classList.add('on');
-  var el=document.getElementById('gen-form-title'); if(el)el.textContent=t+' Generator';
+  // Show/hide option panels
+  var lessonOpts=document.getElementById('gen-lesson-opts');
+  var notesOpts=document.getElementById('gen-notes-opts');
+  var podcastOpts=document.getElementById('gen-podcast-opts');
+  var podcastCard=document.getElementById('podcast-player-card');
+  var outTitle=document.getElementById('gen-out-title');
+  var mainBtn=document.getElementById('gen-main-btn');
+  var formTitle=document.getElementById('gen-form-title');
+  var icons={'LessonPlan':'&#x1F4DA;','LectureNotes':'&#x1F4DD;','Rubric':'&#x1F4CF;','Quiz':'&#x2753;','Slides':'&#x1F5A5;','Worksheet':'&#x1F4C4;','Podcast':'&#x1F3A7;'};
+  var labels={'LessonPlan':'Lesson Plan Generator','LectureNotes':'Lecture Notes Generator','Rubric':'Rubric Generator','Quiz':'Quiz Generator','Slides':'Slide Deck Generator','Worksheet':'Worksheet Generator','Podcast':'Podcast Script Generator'};
+  if(formTitle)formTitle.innerHTML=(icons[t]||'&#x2728;')+' '+(labels[t]||t+' Generator');
+  if(outTitle)outTitle.textContent=labels[t]||'Generated Content';
+  if(lessonOpts)lessonOpts.style.display=(t==='LessonPlan')?'':'none';
+  if(notesOpts)notesOpts.style.display=(t==='LectureNotes')?'':'none';
+  if(podcastOpts)podcastOpts.style.display=(t==='Podcast')?'':'none';
+  if(podcastCard)podcastCard.style.display='none';
+  if(mainBtn)mainBtn.textContent=(t==='Podcast')?'&#x1F3A7; Generate Podcast Script':'&#x2728; Generate with AI';
 }
 
 async function genContent(){
@@ -1089,25 +1192,192 @@ async function genContent(){
   var grade=(document.getElementById('gen-grade')||{}).value||'3rd Sem';
   var prog=(document.getElementById('gen-prog')||{}).value||'B.E.';
   var dur=(document.getElementById('gen-dur')||{}).value||'45 min';
-  var bl=(document.getElementById('gen-bl')||{}).value||'3';
+  var bl=parseInt((document.getElementById('gen-bl')||{}).value)||3;
   var co=(document.getElementById('gen-co')||{}).value||'CO1';
+  var po=(document.getElementById('gen-po')||{}).value||'PO1';
   var notes=(document.getElementById('gen-notes')||{}).value||'';
-  var bL=['','Remember','Understand','Apply','Analyze','Evaluate','Create'][parseInt(bl)]||'Apply';
-  var tag='[CO:'+co+'][BL:L'+bl+'-'+bL+']';
-  var prompts={
-    Lesson:'Create a COMPLETE detailed '+dur+' lesson plan for '+prog+' '+grade+' on "'+topic+'". Bloom L'+bl+' ('+bL+'). CO:'+co+'.\nInclude in full: Learning Objectives (3-4), Materials, Hook/Intro (5 min), Main Content with examples, Student Activity, Discussion Questions (5), Assessment, CO-PO mapping. Notes: '+notes,
-    Quiz:'Create EXACTLY 10 MCQ questions for '+prog+' '+grade+' on "'+topic+'". Bloom L'+bl+' ('+bL+'). CO:'+co+'.\nFor each question write: Full question text, 4 options (A B C D), Correct answer, Explanation, '+tag+'. End with complete answer key.',
-    Rubric:'Create a COMPLETE grading rubric for '+prog+' '+grade+' on "'+topic+'". CO:'+co+'.\n5 criteria, each tagged '+tag+'. For each: Excellent(4), Proficient(3), Developing(2), Beginning(1) with full descriptions. Include CO attainment levels.',
-    Slides:'Create a COMPLETE 10-slide deck for '+prog+' '+grade+' on "'+topic+'" ('+dur+'). CO:'+co+'.\nFor each slide: Title, 4-5 key points, Speaker notes, Visual description, '+tag+'. Slide 1=Intro, 2-8=Content, 9=Summary, 10=Activity.',
-    Worksheet:'Create a COMPLETE student worksheet for '+prog+' '+grade+' on "'+topic+'". CO:'+co+'.\nSection A: 5 Fill-in-blank (with word bank) '+tag+'\nSection B: 3 Short answer questions '+tag+'\nSection C: 2 Problem-solving questions '+tag+'\nSection D: 1 Reflection question\nEnd with full Answer Key.'
-  };
-  await callAI(prompts[GEN_TAB]||prompts.Lesson,'gen-out',function(t){
+  var bL=['','Remember','Understand','Apply','Analyze','Evaluate','Create'][bl]||'Apply';
+  var tag='[CO:'+co+'][PO:'+po+'][BL:L'+bl+'-'+bL+']';
+
+  var prompt='';
+
+  if(GEN_TAB==='LessonPlan'){
+    var method=(document.getElementById('gen-method')||{}).value||'Lecture';
+    var withRubric=(document.getElementById('gen-with-rubric')||{}).value||'yes';
+    var rubricType=(document.getElementById('gen-rubric-type')||{}).value||'Analytic';
+    prompt='Create a COMPLETE and DETAILED '+dur+' Lesson Plan for '+prog+' ('+grade+') on "'+topic+'".';
+    prompt+='\nTeaching Method: '+method+' | Bloom Target: L'+bl+' ('+bL+') | '+tag;
+    prompt+='\nNotes: '+notes;
+    prompt+='\n\nInclude ALL of these sections in full:\n';
+    prompt+='1. LESSON OVERVIEW\n   - Subject, Topic, Duration, Programme, Semester\n   - CO: '+co+' | PO: '+po+'\n';
+    prompt+='2. LEARNING OBJECTIVES (4 objectives, each mapped to Bloom level L'+bl+')\n';
+    prompt+='3. PREREQUISITE KNOWLEDGE\n';
+    prompt+='4. MATERIALS & RESOURCES\n';
+    prompt+='5. LESSON TIMELINE\n   - Introduction/Hook (5 min): Engaging opening activity or question\n   - Prior Knowledge Check (5 min)\n   - Main Instruction ('+Math.round(parseInt(dur)*0.5)+' min): Detailed content delivery\n   - Guided Practice (10 min): Examples with step-by-step solutions\n   - Student Activity (10 min): Hands-on task or problem set\n   - Discussion Questions (5): Socratic questions at L'+bl+' Bloom level\n   - Closure/Summary (5 min)\n';
+    prompt+='6. DIFFERENTIATION STRATEGIES (for advanced and struggling students)\n';
+    prompt+='7. FORMATIVE ASSESSMENT\n';
+    if(withRubric==='yes'){
+      prompt+='8. '+rubricType.toUpperCase()+' ASSESSMENT RUBRIC\n';
+      prompt+='   Create a '+rubricType+' rubric with 5 criteria mapped to '+co+' and Bloom L'+bl+'.\n';
+      prompt+='   Each criterion: Excellent (4pts), Proficient (3pts), Developing (2pts), Beginning (1pt)\n';
+      prompt+='   Include: Rubric criteria | Descriptors | CO attainment mapping | Total score\n';
+    }
+    prompt+='9. CO-PO-BLOOM ATTAINMENT MAPPING TABLE\n';
+    prompt+='10. TEACHER REFLECTION NOTES TEMPLATE\n';
+
+  } else if(GEN_TAB==='LectureNotes'){
+    var style=(document.getElementById('gen-notes-style')||{}).value||'Detailed Narrative';
+    var inclExamples=document.getElementById('ln-examples')&&document.getElementById('ln-examples').checked;
+    var inclDiagrams=document.getElementById('ln-diagrams')&&document.getElementById('ln-diagrams').checked;
+    var inclKeyterms=document.getElementById('ln-keyterms')&&document.getElementById('ln-keyterms').checked;
+    var inclQuestions=document.getElementById('ln-questions')&&document.getElementById('ln-questions').checked;
+    var inclSummary=document.getElementById('ln-summary')&&document.getElementById('ln-summary').checked;
+    prompt='Create COMPLETE and DETAILED Lecture Notes ('+style+') for '+prog+' ('+grade+') on "'+topic+'".';
+    prompt+='\nBloom Target: L'+bl+' ('+bL+') | '+tag+' | Duration: '+dur;
+    prompt+='\nNotes: '+notes;
+    prompt+='\n\nLecture Notes must include:\n';
+    prompt+='1. TITLE PAGE INFO: Subject, Topic, Programme, Semester, CO: '+co+', PO: '+po+'\n';
+    prompt+='2. LEARNING OBJECTIVES (4 objectives at Bloom L'+bl+')\n';
+    prompt+='3. INTRODUCTION & MOTIVATION (Why this topic matters)\n';
+    prompt+='4. MAIN CONTENT — divided into clear numbered sections with sub-sections\n';
+    if(inclExamples)prompt+='5. WORKED EXAMPLES (minimum 3 fully solved examples with steps)\n';
+    if(inclDiagrams)prompt+='6. DIAGRAM DESCRIPTIONS (describe each diagram/figure with labels)\n';
+    if(inclKeyterms)prompt+='7. KEY TERMS & DEFINITIONS (all technical terms with precise definitions)\n';
+    if(inclQuestions)prompt+='8. REVIEW QUESTIONS (5 questions spanning L1–L'+bl+' Bloom levels)\n';
+    if(inclSummary)prompt+='9. CHAPTER SUMMARY BOX (concise 5-7 point summary of key takeaways)\n';
+    prompt+='10. REFERENCES & FURTHER READING\n';
+    prompt+='\nWrite comprehensive, academically rigorous notes suitable for student self-study.\n';
+
+  } else if(GEN_TAB==='Rubric'){
+    prompt='Create a COMPLETE and DETAILED assessment rubric for '+prog+' ('+grade+') on "'+topic+'".';
+    prompt+='\n'+tag+' | Notes: '+notes;
+    prompt+='\n\nRubric must include:\n';
+    prompt+='1. RUBRIC TITLE, Subject, CO: '+co+', PO: '+po+', Bloom Level: L'+bl+' ('+bL+')';
+    prompt+='\n2. ANALYTIC RUBRIC TABLE with 6 criteria:';
+    prompt+='\n   Each criterion mapped to '+co+' and tagged '+tag;
+    prompt+='\n   Performance levels: Excellent(4) | Proficient(3) | Developing(2) | Beginning(1)';
+    prompt+='\n   Each cell has: specific descriptor + observable evidence';
+    prompt+='\n3. HOLISTIC RUBRIC (overall 4-level description)';
+    prompt+='\n4. CO ATTAINMENT TABLE: CO | Target | Actual (formula) | Attainment %';
+    prompt+='\n5. GRADING SCALE: Score ranges to letter grades';
+    prompt+='\n6. INSTRUCTOR NOTES on applying the rubric';
+
+  } else if(GEN_TAB==='Quiz'){
+    prompt='Create EXACTLY 10 MCQ questions for '+prog+' ('+grade+') on "'+topic+'". '+tag;
+    prompt+='\nFor each question:\n  Q no. Full question text\n  A) B) C) D) options\n  Answer: X\n  Explanation: ...\n  '+tag+'\nEnd with complete Answer Key table.';
+
+  } else if(GEN_TAB==='Slides'){
+    prompt='Create a COMPLETE 10-slide presentation for '+prog+' ('+grade+') on "'+topic+'" ('+dur+'). '+tag;
+    prompt+='\nFor each slide: SLIDE N: Title | Key Points (4-5) | Speaker Notes | Visual Description | '+tag;
+    prompt+='\nSlide 1=Title/Intro, 2-8=Content, 9=Summary, 10=Discussion Activity.';
+
+  } else if(GEN_TAB==='Worksheet'){
+    prompt='Create a COMPLETE student worksheet for '+prog+' ('+grade+') on "'+topic+'". '+tag;
+    prompt+='\nSection A: 5 Fill-in-blank (with word bank) '+tag;
+    prompt+='\nSection B: 3 Short answer questions '+tag;
+    prompt+='\nSection C: 2 Problem-solving questions '+tag;
+    prompt+='\nSection D: 1 Reflection question\nEnd with full Answer Key.';
+
+  } else if(GEN_TAB==='Podcast'){
+    var langCode=(document.getElementById('gen-podcast-lang')||{}).value||'en';
+    var langObj=INDIAN_LANGS.filter(function(l){return l.code===langCode;})[0]||{label:'English',native:'English'};
+    var fmt=(document.getElementById('gen-podcast-fmt')||{}).value||'Solo Explainer';
+    var epLen=(document.getElementById('gen-podcast-len')||{}).value||'10 min (~1400 words)';
+    var tone=(document.getElementById('gen-podcast-tone')||{}).value||'Conversational & Friendly';
+    var wordTarget=parseInt((epLen.match(/~(\d+) words/)||['','1400'])[1])||1400;
+
+    prompt='Write a complete PODCAST SCRIPT on "'+topic+'" for engineering students ('+prog+', '+grade+').';
+    if(langCode!=='en'){
+      prompt+='\n\nLANGUAGE: Write the ENTIRE script in '+langObj.label+' ('+langObj.native+'). ';
+      prompt+='Use natural, spoken '+langObj.label+' as used in Indian classrooms and technical education. ';
+      prompt+='Technical terms like Boolean algebra, logic gates, etc. may remain in English but all narration, transitions, and explanations must be in '+langObj.label+'.';
+    } else {
+      prompt+='\n\nLANGUAGE: Write in clear English with an Indian academic tone — warm, encouraging, and relatable to Indian engineering students.';
+    }
+    prompt+='\n\nFORMAT: '+fmt;
+    prompt+='\nLENGTH: Approximately '+wordTarget+' words ('+epLen+')';
+    prompt+='\nTONE: '+tone;
+    prompt+='\nBLOOM LEVEL: L'+bl+' ('+bL+') | CO: '+co;
+    prompt+='\n\nScript structure:\n';
+    if(fmt.indexOf('Two Hosts')!==-1){
+      prompt+='HOST A (Professor/Expert) and HOST B (Student/Co-host) — alternating dialogue\n';
+      prompt+='[HOST A]: ... \n[HOST B]: ...\n';
+    } else if(fmt.indexOf('Interview')!==-1){
+      prompt+='[HOST]: ... \n[EXPERT]: ...\n';
+    } else {
+      prompt+='[NARRATOR/HOST]: ...\n';
+    }
+    prompt+='\n1. INTRO (catchy hook, episode title, what listeners will learn)\n';
+    prompt+='2. MAIN CONTENT (explain '+topic+' clearly with analogies and real-world examples)\n';
+    prompt+='3. KEY CONCEPTS BREAKDOWN (step by step, use examples relevant to Indian context)\n';
+    prompt+='4. INTERESTING FACT or REAL-WORLD APPLICATION\n';
+    prompt+='5. QUICK RECAP (3 key takeaways)\n';
+    prompt+='6. OUTRO (encourage questions, preview next episode)\n';
+    prompt+='\nMake it natural spoken-word — avoid bullet points. Write as actual dialogue/narration.';
+    prompt+='\nNotes: '+notes;
+  }
+
+  var outEl=document.getElementById('gen-out');
+  if(outEl)outEl.textContent='Generating...';
+  await callAI(prompt,'gen-out',function(t){
     mats.push({id:Date.now()+'',title:topic,type:GEN_TAB,date:new Date().toLocaleDateString('en-IN'),content:t,by:CU?CU.id:''});
-    toast(GEN_TAB+' generated!','s');
+    toast(GEN_TAB.replace(/([A-Z])/g,' $1').trim()+' generated!','s');
+    if(GEN_TAB==='Podcast'){
+      podcastScript=t;
+      var langCode2=(document.getElementById('gen-podcast-lang')||{}).value||'en';
+      var langObj2=INDIAN_LANGS.filter(function(l){return l.code===langCode2;})[0]||{label:'English'};
+      var epCard=document.getElementById('podcast-player-card');
+      if(epCard)epCard.style.display='';
+      var epTitle=document.getElementById('podcast-ep-title');
+      if(epTitle)epTitle.textContent=topic+' — Podcast Episode';
+      var epMeta=document.getElementById('podcast-ep-meta');
+      if(epMeta)epMeta.textContent=(document.getElementById('gen-podcast-len')||{}).value+' | '+langObj2.label+' | '+(document.getElementById('gen-podcast-fmt')||{}).value;
+    }
   });
 }
-function saveGen(){var c=(document.getElementById('gen-out')||{}).textContent||'';if(!c||c==='Fill the form and click Generate.'){toast('Generate first','e');return;}toast('Saved!','s');}
-function expGen(){var t=(document.getElementById('gen-topic')||{}).value||'Content';makePDF(t,(document.getElementById('gen-out')||{}).textContent||'');}
+
+function playPodcast(){
+  if(!podcastScript){toast('Generate a podcast script first','e');return;}
+  if(!window.speechSynthesis){toast('Browser TTS not supported — try Chrome or Edge','w');return;}
+  window.speechSynthesis.cancel();
+  var langCode=(document.getElementById('gen-podcast-lang')||{}).value||'en';
+  var langObj=INDIAN_LANGS.filter(function(l){return l.code===langCode;})[0]||{label:'English'};
+  // Clean script: strip stage directions like [HOST A]: for TTS
+  var cleanText=podcastScript.replace(/\[.*?\]:/g,'').replace(/\[.*?\]/g,'');
+  var utt=new SpeechSynthesisUtterance(cleanText);
+  // Try to find a matching voice
+  var voices=window.speechSynthesis.getVoices();
+  var langMap={en:'en-IN',hi:'hi-IN',kn:'kn-IN',ta:'ta-IN',te:'te-IN',mr:'mr-IN',ml:'ml-IN',gu:'gu-IN',bn:'bn-IN',pa:'pa-IN'};
+  var targetLang=langMap[langCode]||('en-IN');
+  var voice=voices.filter(function(v){return v.lang===targetLang;})[0]
+    ||voices.filter(function(v){return v.lang.startsWith(langCode);})[0]
+    ||voices.filter(function(v){return v.lang.indexOf('IN')>-1;})[0]
+    ||null;
+  if(voice){utt.voice=voice;}
+  utt.lang=targetLang;
+  utt.rate=0.9; utt.pitch=1.0;
+  var btn=document.getElementById('podcast-play-btn');
+  if(btn)btn.textContent='&#x23F8; Playing...';
+  utt.onend=function(){if(btn)btn.textContent='&#x25B6; Read Aloud (Browser TTS)';};
+  window.speechSynthesis.speak(utt);
+  toast('Playing podcast in '+langObj.label+' — '+targetLang+' voice','s');
+}
+
+function stopPodcast(){
+  if(window.speechSynthesis)window.speechSynthesis.cancel();
+  var btn=document.getElementById('podcast-play-btn');
+  if(btn)btn.textContent='&#x25B6; Read Aloud (Browser TTS)';
+}
+
+function saveGen(){
+  var c=(document.getElementById('gen-out')||{}).textContent||'';
+  if(!c||c==='Select a tab and click Generate.'){toast('Generate first','e');return;}
+  toast('Saved to Materials!','s');
+}
+function expGen(){
+  var t=(document.getElementById('gen-topic')||{}).value||GEN_TAB;
+  makePDF(t+' — '+GEN_TAB,(document.getElementById('gen-out')||{}).textContent||'');
+}
 function updateQPPIs(){
   var poSel=document.getElementById('qp-po');
   var piSel=document.getElementById('qp-pi');
