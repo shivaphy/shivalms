@@ -340,6 +340,22 @@ var qzData= null;   // loaded quiz
 var qzAns = {};     // quiz answers
 var bLib  = [];     // boost library
 var bShared=[];     // shared boost activities
+var bStuLogs=[];    // student tutor activity logs [{uid,unm,topic,co,bl,ts,turns:[{role,text,scaffold}],writing,langCode}]
+var bTutorLang='en'; // active tutor language code
+var INDIAN_LANGS=[
+  {code:'en',   label:'English',       native:'English'},
+  {code:'hi',   label:'Hindi',         native:'हिन्दी'},
+  {code:'kn',   label:'Kannada',       native:'ಕನ್ನಡ'},
+  {code:'ta',   label:'Tamil',         native:'தமிழ்'},
+  {code:'te',   label:'Telugu',        native:'తెలుగు'},
+  {code:'mr',   label:'Marathi',       native:'मराठी'},
+  {code:'ml',   label:'Malayalam',     native:'മലയാളം'},
+  {code:'gu',   label:'Gujarati',      native:'ગુજરાતી'},
+  {code:'bn',   label:'Bengali',       native:'বাংলা'},
+  {code:'pa',   label:'Punjabi',       native:'ਪੰਜਾਬੀ'},
+  {code:'or',   label:'Odia',          native:'ଓଡ଼ିଆ'},
+  {code:'ur',   label:'Urdu',          native:'اردو'}
+];
 var bTutorCtx = {  // active tutor session context
   topic:'', sub:'', co:'', bl:3, blLabel:'Apply',
   ia:'', history:[]  // conversation history for scaffolding continuity
@@ -543,6 +559,7 @@ function buildNav(){
     h+='<button class="nav-btn" data-p="dash"    onclick="nav(\'dash\')"><span class="nav-ic">&#x1F3E0;</span><span>Dashboard</span></button>';
     h+='<button class="nav-btn" data-p="gen"     onclick="nav(\'gen\')"><span class="nav-ic">&#x2728;</span><span>AI Generator</span></button>';
     h+='<button class="nav-btn" data-p="boost"   onclick="nav(\'boost\')"><span class="nav-ic">&#x1F680;</span><span>Boost Teaching</span></button>';
+    h+='<button class="nav-btn" data-p="boost" onclick="nav(\'boost\');setTimeout(function(){setBoostTab(\'studentanalytics\',document.querySelectorAll(\'#boost-tabs .tab\')[4]);},200)" style="padding-left:28px"><span class="nav-ic" style="font-size:13px">&#x1F4CA;</span><span>Student Analytics</span></button>';
     h+='<button class="nav-btn" data-p="qp"      onclick="nav(\'qp\')"><span class="nav-ic">&#x1F4CB;</span><span>Question Papers</span></button>';
     h+='<button class="nav-btn" data-p="ia"      onclick="nav(\'ia\')"><span class="nav-ic">&#x1F4CA;</span><span>IA Marks</span></button>';
     h+='<button class="nav-btn" data-p="att"     onclick="nav(\'att\')"><span class="nav-ic">&#x1F4C5;</span><span>Attendance</span></button>';
@@ -934,8 +951,8 @@ async function genQP(){
 function renderBoost(){
   var el=document.getElementById('boost-body'); if(!el)return;
   var h='<div class="tabs" id="boost-tabs">';
-  ['Create','Library','Guide','Feedback'].forEach(function(t,i){
-    h+='<button class="tab'+(i===0?' on':'')+'" onclick="setBoostTab(\''+t.toLowerCase()+'\',this)">'+t+'</button>';
+  ['Create','Library','Guide','Feedback','Student Analytics'].forEach(function(t,i){
+    h+='<button class="tab'+(i===0?' on':'')+'" onclick="setBoostTab(\''+t.toLowerCase().replace(/ /g,\'\')+'\',this)">'+t+'</button>';
   });
   h+='</div>';
   // CREATE tab
@@ -986,14 +1003,17 @@ function renderBoost(){
   h+='<div class="fg"><label>Style</label><select id="btf-style"><option>Glows and Grows</option><option>Next Steps Only</option><option>Rubric-Based</option><option>Comprehensive</option></select></div>';
   h+='<button class="btn btn-p" style="width:100%;justify-content:center" onclick="genBoostFeedback()">Generate Feedback</button></div>';
   h+='<div class="card" style="display:flex;flex-direction:column;gap:8px"><div class="stl">Feedback Output</div><div class="ai-out" id="btf-out" style="flex:1;min-height:340px">Feedback appears here.</div></div></div></div>';
+  // STUDENT ANALYTICS tab
+  h+='<div id="bt-studentanalytics" style="display:none"><div id="bt-analytics-inner"></div></div>';
   el.innerHTML=h;
 }
 
 function setBoostTab(t,btn){
-  ['create','library','guide','feedback'].forEach(function(x){var e=document.getElementById('bt-'+x);if(e)e.style.display=x===t?'':'none';});
+  ['create','library','guide','feedback','studentanalytics'].forEach(function(x){var e=document.getElementById('bt-'+x);if(e)e.style.display=x===t?'':'none';});
   document.querySelectorAll('#boost-tabs .tab').forEach(function(b){b.classList.remove('on');});
   if(btn)btn.classList.add('on');
   if(t==='library')renderBoostLib();
+  if(t==='studentanalytics')renderStudentAnalytics();
 }
 
 function loadBoostPDF(input){
@@ -1100,6 +1120,184 @@ async function genBoostFeedback(){
   var style=(document.getElementById('btf-style')||{}).value||'Glows and Grows';
   var bL=['','Remember','Understand','Apply','Analyze','Evaluate','Create'][bl]||'Apply';
   await callAI('Give '+style+' feedback on '+nm+'\'s writing.\nTask: '+task+'\nCO: '+co+' | Bloom: L'+bl+' ('+bL+')\nWriting: "'+text.slice(0,700)+'"\n\nSections: BLOOM ASSESSMENT, GLOWS (2-3), GROWS (2-3), NEXT STEPS, CO ATTAINMENT.\nPlain English.','btf-out');
+}
+
+// ============================================================
+// STUDENT ANALYTICS — Faculty View
+// ============================================================
+function renderStudentAnalytics(){
+  var el=document.getElementById('bt-analytics-inner'); if(!el)return;
+  var blLabels=['','Remember','Understand','Apply','Analyze','Evaluate','Create'];
+  // Group logs by student
+  var byStudent={};
+  bStuLogs.forEach(function(log){
+    if(!byStudent[log.uid])byStudent[log.uid]={uid:log.uid,unm:log.unm,logs:[]};
+    byStudent[log.uid].logs.push(log);
+  });
+  var students=Object.values(byStudent);
+  // Summary stats
+  var totalStudents=USERS.filter(function(u){return u.role==='student';}).length;
+  var activeCount=students.length;
+  var totalTurns=bStuLogs.reduce(function(s,l){return s+(l.turns?l.turns.length:0);},0);
+  var h='<div class="g3" style="margin-bottom:14px">';
+  h+='<div class="stat"><div class="stat-l">Students Active</div><div class="stat-n">'+activeCount+'/'+totalStudents+'</div></div>';
+  h+='<div class="stat"><div class="stat-l">Total Sessions</div><div class="stat-n">'+bStuLogs.length+'</div></div>';
+  h+='<div class="stat"><div class="stat-l">Total Exchanges</div><div class="stat-n">'+totalTurns+'</div></div>';
+  h+='</div>';
+  if(!bStuLogs.length){
+    h+='<div class="card" style="text-align:center;padding:40px;color:var(--mx)">&#x1F4CA; No student tutor sessions recorded yet.<br><span style="font-size:12px">Activity appears here once students start using the AI Boost Tutor.</span></div>';
+    el.innerHTML=h; return;
+  }
+  // Per-student cards
+  h+='<div style="display:flex;flex-direction:column;gap:14px">';
+  // Also show students with no activity
+  USERS.filter(function(u){return u.role==='student';}).forEach(function(stu){
+    var sData=byStudent[stu.id];
+    h+='<div class="card" id="analytics-card-'+stu.id+'">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px">';
+    h+='<div style="display:flex;align-items:center;gap:10px">';
+    h+='<div class="avi" style="width:36px;height:36px;font-size:13px;background:#E0F2FE;color:#0369A1">'+stu.av+'</div>';
+    h+='<div><div style="font-size:14px;font-weight:600">'+stu.nm+'</div>';
+    h+='<div style="font-size:11px;color:var(--mx)">'+stu.usn+' | '+stu.cls+'</div></div></div>';
+    if(sData){
+      var lastLog=sData.logs[sData.logs.length-1];
+      var totalEx=sData.logs.reduce(function(s,l){return s+(l.turns?l.turns.length:0);},0);
+      var scaffoldCounts={hint:0,build:0,check:0,extend:0};
+      sData.logs.forEach(function(l){(l.turns||[]).forEach(function(t){if(t.scaffold&&scaffoldCounts[t.scaffold]!==undefined)scaffoldCounts[t.scaffold]++;});});
+      h+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
+      h+='<span class="badge bg-g">'+sData.logs.length+' session'+(sData.logs.length>1?'s':'')+'</span>';
+      h+='<span class="badge" style="background:#EFF6FF;color:#1D4ED8">'+totalEx+' exchanges</span>';
+      h+='<button class="btn btn-p btn-sm" onclick="showStudentPreview(''+stu.id+'')">&#x1F50D; Preview Activity</button>';
+      h+='<button class="btn btn-o btn-sm" onclick="aiAssessStudent(''+stu.id+'')">&#x1F916; AI Assessment</button>';
+      h+='</div>';
+      // Scaffold usage mini-bar
+      h+='</div>';
+      h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
+      [{k:'hint',l:'HINT',c:'#BFDBFE'},{k:'build',l:'BUILD',c:'#DDD6FE'},{k:'check',l:'CHECK',c:'#BBF7D0'},{k:'extend',l:'EXTEND',c:'#FDE68A'}].forEach(function(s){
+        h+='<div style="background:'+s.c+';border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600">'+s.l+': '+scaffoldCounts[s.k]+'</div>';
+      });
+      // Last session preview
+      h+='</div>';
+      h+='<div style="background:var(--s2);border-radius:8px;padding:10px;font-size:12px">';
+      h+='<div style="font-weight:600;margin-bottom:4px">Last session: <span style="color:var(--mx)">'+lastLog.topic+'</span> &nbsp;|&nbsp; '+lastLog.co+' &nbsp;|&nbsp; Bloom L'+lastLog.bl+'</div>';
+      if(lastLog.writing){
+        h+='<div style="color:var(--mx);font-style:italic;border-left:3px solid #CBD5E1;padding-left:8px;margin-top:6px">"'+lastLog.writing.slice(0,200)+(lastLog.writing.length>200?'...':'')+'"</div>';
+      }
+      h+='</div>';
+      h+='<div id="student-preview-'+stu.id+'" style="display:none"></div>';
+      h+='<div id="student-ai-'+stu.id+'" style="display:none"></div>';
+    } else {
+      h+='<div><span class="badge bg-y">No activity yet</span></div></div>';
+      h+='<div style="font-size:12px;color:var(--mx)">This student has not started any AI Boost Tutor session yet.</div>';
+    }
+    h+='</div>';
+  });
+  h+='</div>';
+  el.innerHTML=h;
+}
+
+function showStudentPreview(uid){
+  var el=document.getElementById('student-preview-'+uid);
+  var aiEl=document.getElementById('student-ai-'+uid);
+  if(!el)return;
+  if(el.style.display!=='none'){el.style.display='none';return;}
+  if(aiEl)aiEl.style.display='none';
+  var sData=bStuLogs.filter(function(l){return l.uid===uid;});
+  if(!sData.length){el.innerHTML='<div style="color:var(--mx);font-size:12px">No sessions found.</div>';el.style.display='block';return;}
+  var blLabels=['','Remember','Understand','Apply','Analyze','Evaluate','Create'];
+  var h='<div style="margin-top:12px;border-top:1px solid var(--bd);padding-top:12px">';
+  h+='<div style="font-size:13px;font-weight:600;margin-bottom:10px">&#x1F4CB; Full Activity Preview</div>';
+  // Tabs for each session
+  sData.forEach(function(log,si){
+    h+='<div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:12px">';
+    h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">';
+    h+='<span style="font-size:12px;font-weight:600">Session '+(si+1)+':</span>';
+    h+='<span style="font-size:12px;color:var(--mx)">'+log.topic+'</span>';
+    h+='<span class="badge" style="background:#EFF6FF;color:#1D4ED8">'+log.co+'</span>';
+    h+='<span class="badge" style="background:#F0FDF4;color:#15803D">L'+log.bl+' '+blLabels[log.bl]+'</span>';
+    if(log.langCode&&log.langCode!=='en')h+='<span class="badge" style="background:#FEF3C7;color:#92400E">'+log.langCode.toUpperCase()+'</span>';
+    h+='<span style="font-size:10px;color:var(--mx);margin-left:auto">'+log.ts+'</span>';
+    h+='</div>';
+    if(log.writing){
+      h+='<div style="background:#F0FDF4;border-left:3px solid #15803D;padding:8px;border-radius:4px;font-size:12px;margin-bottom:8px">';
+      h+='<div style="font-weight:600;color:#15803D;margin-bottom:4px">Student Written Response:</div>';
+      h+='<div>'+log.writing+'</div></div>';
+    }
+    if(log.turns&&log.turns.length){
+      h+='<div style="font-weight:600;font-size:12px;margin-bottom:6px">Conversation ('+log.turns.length+' exchanges):</div>';
+      log.turns.forEach(function(turn){
+        var isU=turn.role==='user';
+        h+='<div style="display:flex;gap:8px;margin-bottom:6px;align-items:flex-start">';
+        h+='<div style="min-width:48px;font-size:10px;font-weight:600;padding:2px 5px;border-radius:4px;margin-top:2px;text-align:center;'+(isU?'background:#DBEAFE;color:#1D4ED8':'background:#F3F4F6;color:#374151')+'">'+( isU?'STUDENT':'TUTOR')+'</div>';
+        h+='<div style="font-size:12px;line-height:1.5;flex:1">';
+        if(turn.scaffold)h+='<span style="font-size:10px;background:#FDE68A;color:#92400E;padding:1px 5px;border-radius:3px;margin-right:4px">'+turn.scaffold.toUpperCase()+'</span>';
+        h+=turn.text+'</div></div>';
+      });
+    }
+    h+='</div>';
+  });
+  h+='</div>';
+  el.innerHTML=h;
+  el.style.display='block';
+}
+
+async function aiAssessStudent(uid){
+  var el=document.getElementById('student-ai-'+uid);
+  var prevEl=document.getElementById('student-preview-'+uid);
+  if(!el)return;
+  if(prevEl)prevEl.style.display='none';
+  var sData=bStuLogs.filter(function(l){return l.uid===uid;});
+  if(!sData.length){el.innerHTML='<div style="color:var(--mx);font-size:12px">No sessions to assess.</div>';el.style.display='block';return;}
+  var stu=(USERS.filter(function(u){return u.id===uid;})[0])||{nm:'Student'};
+  el.style.display='block';
+  el.innerHTML='<div style="margin-top:12px;border-top:1px solid var(--bd);padding-top:12px"><div class="msg msg-a thinking"><div class="dots"><span></span><span></span><span></span></div></div></div>';
+  // Build assessment prompt
+  var blLabels=['','Remember','Understand','Apply','Analyze','Evaluate','Create'];
+  var summary='Student: '+stu.nm+'
+';
+  sData.forEach(function(log,i){
+    summary+='Session '+(i+1)+': Topic='+log.topic+' | CO='+log.co+' | Bloom L'+log.bl+' '+blLabels[log.bl]+'
+';
+    if(log.writing)summary+='Writing: "'+log.writing.slice(0,300)+'"
+';
+    var scaffolds=[];
+    (log.turns||[]).forEach(function(t){if(t.scaffold)scaffolds.push(t.scaffold);});
+    if(scaffolds.length)summary+='Scaffold used: '+scaffolds.join(', ')+'
+';
+    (log.turns||[]).forEach(function(t){if(t.role==='user')summary+='Student said: "'+t.text.slice(0,100)+'"
+';});
+    summary+='
+';
+  });
+  var prompt='You are an expert educational analyst. Assess the following student's Brisk Boost AI Tutor activity.
+
+'+summary+'
+Write a structured faculty report with these sections:
+1. BLOOM LEVEL REACHED (actual vs target)
+2. KEY STRENGTHS (2-3 specific points from their writing/responses)
+3. KNOWLEDGE GAPS (2-3 areas needing attention)
+4. SCAFFOLD DEPENDENCY (which scaffolds they rely on most and what this means)
+5. RECOMMENDED NEXT STEPS (2 specific actions for the teacher)
+6. CO ATTAINMENT ESTIMATE (Low/Partial/Satisfactory/Good/Excellent)
+
+Be specific, cite evidence from their responses. Plain English. Under 350 words.';
+  var key=getK();
+  if(!key||key.indexOf('AIzaSy')!==0){el.innerHTML='<div style="margin-top:12px;color:var(--mx);font-size:12px">Set Gemini API key in Settings to enable AI assessment.</div>';return;}
+  var responded=false;
+  for(var i=0;i<GKEYS.length;i++){
+    try{
+      var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GKEYS[i]+':generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:700,temperature:0.4}})});
+      if(r.ok){var d=await r.json();var t=d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts&&d.candidates[0].content.parts[0]?d.candidates[0].content.parts[0].text:'';
+        if(t){
+          el.innerHTML='<div style="margin-top:12px;border-top:1px solid var(--bd);padding-top:12px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">&#x1F916; AI Strength & Weakness Assessment</div><div style="background:var(--sf);border:1px solid var(--bd);border-radius:9px;padding:14px;font-size:12px;line-height:1.8;white-space:pre-wrap">'+t+'</div><div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-o btn-sm" onclick="makePDF('Student Assessment',this.previousElementSibling.textContent)">&#x1F4CB; Export PDF</button></div></div>';
+          responded=true;break;
+        }
+      }
+      if(r.status===429){await new Promise(function(res){setTimeout(res,2000);});continue;}
+      break;
+    }catch(e){break;}
+  }
+  if(!responded)el.innerHTML='<div style="margin-top:12px;color:var(--mx);font-size:12px">Rate limited. Wait 60 seconds and try again.</div>';
 }
 
 // IA Marks
@@ -1397,10 +1595,17 @@ function renderStuBoost(){
   h+='</div></div></div>';
   var greeting=hasCtx?'Hello! I am your Brisk Boost AI Tutor.\n\nWe are working on: '+bTutorCtx.co+' \u2014 '+bTutorCtx.topic+'\nTarget: Bloom L'+bl+' ('+blLabels[bl]+')\n\nUse the scaffold buttons, or type your response below and I will guide you step by step!':'Hello! I am your Brisk Boost AI Tutor.\n\nOpen an activity from the list above to load your topic, or type a question and I will help you.';
   h+='<div class="card" style="display:flex;flex-direction:column">';
-  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">';
-  h+='<div style="width:34px;height:34px;background:#1E40AF;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px">&#x1F916;</div>';
-  h+='<div><div style="font-size:13px;font-weight:600">Brisk Boost AI Tutor</div>';
-  h+='<div style="font-size:11px;color:var(--mx)" id="tutor-status">'+(hasCtx?'Active topic: '+bTutorCtx.topic:'Waiting for topic \u2014 open an activity to begin')+'</div></div></div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">';
+  h+='<div style="width:34px;height:34px;background:#1E40AF;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;flex-shrink:0">&#x1F916;</div>';
+  h+='<div style="flex:1"><div style="font-size:13px;font-weight:600">Brisk Boost AI Tutor</div>';
+  h+='<div style="font-size:11px;color:var(--mx)" id="tutor-status">'+(hasCtx?'Active topic: '+bTutorCtx.topic:'Waiting for topic \u2014 open an activity to begin')+'</div></div>';
+  h+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">';
+  h+='<span style="font-size:11px;font-weight:600;color:var(--mx)">&#x1F1EE;&#x1F1F3; Language:</span>';
+  h+='<select id="tutor-lang-sel" onchange="setTutorLang(this.value)" style="font-size:12px;padding:3px 6px;border-radius:6px;border:1px solid var(--bd);background:var(--sf);color:var(--tx);font-family:inherit">';
+  INDIAN_LANGS.forEach(function(lg){
+    h+='<option value="'+lg.code+'"'+(bTutorLang===lg.code?' selected':'')+'>'+lg.native+' ('+lg.label+')</option>';
+  });
+  h+='</select></div></div>';
   h+='<div class="chat-box" id="bst-chat" style="flex:1;min-height:300px">';
   h+='<div class="msg msg-a">'+greeting+'</div></div>';
   h+='<div class="chat-row"><input id="bst-inp" placeholder="Type your answer or question..." onkeypress="if(event.key===\'Enter\')boostSend()"/><button class="btn btn-p btn-sm" onclick="boostSend()">Send</button></div>';
@@ -1427,10 +1632,35 @@ function openSharedAct(act){
   var tEl=document.getElementById('work-area-topic');
   if(tEl){tEl.innerHTML='<div style="font-size:13px;font-weight:600;color:#15803D">'+(act.sub+(act.ia?' \u00a0'+act.ia:''))+'</div><div style="font-size:11px;color:#166534">'+act.co+' | Bloom L'+blNum+' '+blLabels[blNum]+' \u2014 '+act.topic+'</div>';}
   var tsEl=document.getElementById('tutor-status'); if(tsEl)tsEl.textContent='Active topic: '+act.topic;
+  // Reset language selector to current setting
+  var langSel=document.getElementById('tutor-lang-sel');
+  if(langSel)langSel.value=bTutorLang||'en';
   var chat=document.getElementById('bst-chat');
   if(chat){var m=document.createElement('div');m.className='msg msg-a';m.textContent='Topic loaded: '+act.co+' \u2014 '+act.topic+'\nBloom Target: L'+blNum+' ('+blLabels[blNum]+')\n\nRead the activity above, then write your response. Click HINT for a nudge, BUILD for a structure, or just start typing!';chat.appendChild(m);chat.scrollTop=chat.scrollHeight;}
   var btn=document.getElementById('start-writing-btn');
   if(btn)btn.onclick=function(){var bw=document.getElementById('bw');if(bw){bw.value='';bw.placeholder='Write your response on: '+act.topic+'\n\n';bw.focus();}};
+}
+
+function setTutorLang(code){
+  bTutorLang=code;
+  var lg=INDIAN_LANGS.filter(function(l){return l.code===code;})[0]||{label:'English',native:'English'};
+  var chat=document.getElementById('bst-chat');
+  if(chat){
+    var m=document.createElement('div');m.className='msg msg-a';
+    if(code==='en'){
+      m.textContent='Language set to English. I will respond in English.';
+    } else {
+      m.textContent='Language set to '+lg.native+' ('+lg.label+'). I will now respond in '+lg.label+'. You can also write your responses in '+lg.native+'.';
+    }
+    chat.appendChild(m);chat.scrollTop=chat.scrollHeight;
+  }
+}
+
+function getLangInstruction(){
+  if(!bTutorLang||bTutorLang==='en')return '';
+  var lg=INDIAN_LANGS.filter(function(l){return l.code===bTutorLang;})[0];
+  if(!lg)return '';
+  return '\nLANGUAGE RULE: Respond ENTIRELY in '+lg.label+' ('+lg.native+'). Use '+lg.label+' script throughout your response. Technical terms (like AND gate, Boolean) may remain in English but all explanations, questions, and guidance must be in '+lg.label+'. If the student writes in English, still respond in '+lg.label+'.\n';
 }
 
 function buildTutorSystemPrompt(){
@@ -1440,7 +1670,7 @@ function buildTutorSystemPrompt(){
   var sub=bTutorCtx.sub||'the subject';
   var co=bTutorCtx.co||'CO1';
   var ia=bTutorCtx.ia||'';
-  return 'You are the Brisk Boost AI Tutor \u2014 a Socratic, scaffolding-focused educator for engineering students.\nCURRENT TOPIC: '+topic+'\nSUBJECT: '+sub+(ia?' | Assessment: '+ia:'')+'\nLEARNING OUTCOME: '+co+'\nBLOOM TARGET: L'+bl+' \u2014 '+blLabels[bl]+'\n\nTUTOR RULES:\n1. NEVER give the full answer directly. Always scaffold thinking.\n2. Gauge the student\'s knowledge from their writing and adapt your depth.\n3. If the student shows L1-L2 (basic recall), use simpler language and guiding questions.\n4. If the student shows L3-L4 (applying/analyzing), push deeper with probing questions.\n5. Always end your response with 1 follow-up question to keep the discussion going.\n6. Responses must be concise, warm, and encouraging.\n7. Use plain English. Avoid jargon unless the student uses it first.\n8. Keep responses under 200 words unless a table or structured breakdown is needed.\n';
+  return 'You are the Brisk Boost AI Tutor \u2014 a Socratic, scaffolding-focused educator for engineering students.\nCURRENT TOPIC: '+topic+'\nSUBJECT: '+sub+(ia?' | Assessment: '+ia:'')+'\nLEARNING OUTCOME: '+co+'\nBLOOM TARGET: L'+bl+' \u2014 '+blLabels[bl]+getLangInstruction()+'\nTUTOR RULES:\n1. NEVER give the full answer directly. Always scaffold thinking.\n2. Gauge the student\'s knowledge from their writing and adapt your depth.\n3. If the student shows L1-L2 (basic recall), use simpler language and guiding questions.\n4. If the student shows L3-L4 (applying/analyzing), push deeper with probing questions.\n5. Always end your response with 1 follow-up question to keep the discussion going.\n6. Responses must be concise, warm, and encouraging.\n7. Avoid jargon unless the student uses it first.\n8. Keep responses under 200 words unless a table or structured breakdown is needed.\n';
 }
 
 function buildHistoryContext(){
@@ -1467,27 +1697,27 @@ function boostScaffold(type){
     extend:sys+hist+workCtx+'\n\nSCAFFOLD TYPE: EXTEND (Bloom L5-L6)\nGive ONE real-world application challenge related to '+topic+' in '+sub+'. Explain what to do, why it matters, and how to present the solution. This should stretch beyond the standard exam answer.'
   };
   var labels={hint:'\ud83d\udca1 I need a Hint',build:'\ud83d\udd28 Give me a BUILD framework',check:'\u2705 Check my work',extend:'\ud83d\ude80 Give me an EXTEND challenge'};
-  addChat(labels[type],'user');
+  addChat(labels[type],'user',type);
   bTutorCtx.history.push({role:'user',text:labels[type]+(work.trim()?' [with '+work.trim().split(/\s+/).length+' words written]':'')});
-  streamChat(scaffoldInstructions[type]);
+  streamChat(scaffoldInstructions[type],type);
 }
 
 function boostCheck(){
   var w=(document.getElementById('bw')||{}).value||'';
   if(!w.trim()){toast('Write something first so I can check it','w');return;}
-  addChat('Please check my work','user');
+  addChat('Please check my work','user','check');
   bTutorCtx.history.push({role:'user',text:'Checking work: '+w.slice(0,100)});
   var sys=buildTutorSystemPrompt();
-  streamChat(sys+'\n\nThe student has written:\n\"'+w.slice(0,600)+'\"\n\nGive: 1 specific strength, 1 specific improvement, and 1 question to push their thinking further. Be brief and encouraging.');
+  streamChat(sys+'\n\nThe student has written:\n\"'+w.slice(0,600)+'\"\n\nGive: 1 specific strength, 1 specific improvement, and 1 question to push their thinking further. Be brief and encouraging.','check');
 }
 
 function boostFeedback(){
   var w=(document.getElementById('bw')||{}).value||'';
   if(!w.trim()){toast('Write something first to get feedback','w');return;}
-  addChat('Glows and Grows feedback please','user');
+  addChat('Glows and Grows feedback please','user','feedback');
   bTutorCtx.history.push({role:'user',text:'Feedback request: '+w.slice(0,100)});
   var sys=buildTutorSystemPrompt();
-  streamChat(sys+'\n\nStudent writing:\n\"'+w.slice(0,700)+'\"\n\nGlows & Grows feedback aligned to '+bTutorCtx.co+' Bloom L'+bTutorCtx.bl+':\nGLOWS: 2 specific strengths\nGROWS: 2 targeted improvements\nNEXT STEP: 1 clear action\nEnd with a question to help the student revise.');
+  streamChat(sys+'\n\nStudent writing:\n\"'+w.slice(0,700)+'\"\n\nGlows & Grows feedback aligned to '+bTutorCtx.co+' Bloom L'+bTutorCtx.bl+':\nGLOWS: 2 specific strengths\nGROWS: 2 targeted improvements\nNEXT STEP: 1 clear action\nEnd with a question to help the student revise.','feedback');
 }
 
 function boostSend(){
@@ -1499,11 +1729,34 @@ function boostSend(){
   var hist=buildHistoryContext();
   var work=(document.getElementById('bw')||{}).value||'';
   var workCtx=work.trim()?('\n\nStudent\'s current writing:\n\"'+work.slice(0,400)+'\"'):'';
-  streamChat(sys+hist+workCtx+'\n\nStudent just said: \"'+m+'\"\n\nRespond as a Socratic tutor. Guide, do not tell. End with one follow-up question.');
+  streamChat(sys+hist+workCtx+'\n\nStudent just said: \"'+m+'\"\n\nRespond as a Socratic tutor. Guide, do not tell. End with one follow-up question.','chat');
 }
 
 
-async function streamChat(prompt){
+// Ensure a current session log exists for the logged-in student
+function ensureStuLog(){
+  if(!CU||CU.role!=='student')return null;
+  // Find or create today's session for current topic
+  var sessionKey=CU.id+'_'+bTutorCtx.topic+'_'+(new Date().toLocaleDateString('en-IN'));
+  var existing=bStuLogs.filter(function(l){return l.sessionKey===sessionKey;})[0];
+  if(existing)return existing;
+  var log={
+    sessionKey:sessionKey,
+    uid:CU.id, unm:CU.nm,
+    topic:bTutorCtx.topic||'General',
+    co:bTutorCtx.co||'CO1',
+    bl:bTutorCtx.bl||3,
+    ia:bTutorCtx.ia||'',
+    ts:new Date().toLocaleString('en-IN'),
+    langCode:bTutorLang||'en',
+    turns:[],
+    writing:''
+  };
+  bStuLogs.push(log);
+  return log;
+}
+
+async function streamChat(prompt,scaffoldType){
   var area=document.getElementById('bst-chat'); if(!area)return;
   var th=document.createElement('div');
   th.className='msg msg-a thinking';
@@ -1515,8 +1768,24 @@ async function streamChat(prompt){
   var responded=false;
   for(var i=0;i<GKEYS.length;i++){
     try{
-      var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GKEYS[i]+':generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:600,temperature:0.7}})});
-      if(r.ok){var d=await r.json();var t=d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts&&d.candidates[0].content.parts[0]?d.candidates[0].content.parts[0].text:'';if(t){th.className='msg msg-a';th.textContent=t;responded=true;break;}}
+      var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GKEYS[i]+':generateContent?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:700,temperature:0.7}})});
+      if(r.ok){
+        var d=await r.json();
+        var t=d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts&&d.candidates[0].content.parts[0]?d.candidates[0].content.parts[0].text:'';
+        if(t){
+          th.className='msg msg-a';th.textContent=t;responded=true;
+          // Log AI response
+          var log=ensureStuLog();
+          if(log){
+            log.turns.push({role:'ai',text:t.slice(0,500),scaffold:scaffoldType||null});
+            // Capture latest writing
+            var bw=document.getElementById('bw');
+            if(bw&&bw.value.trim())log.writing=bw.value.trim().slice(0,1000);
+            log.langCode=bTutorLang||'en';
+          }
+          break;
+        }
+      }
       if(r.status===429){await new Promise(function(res){setTimeout(res,2000);});continue;}
       break;
     }catch(e){break;}
@@ -1524,7 +1793,17 @@ async function streamChat(prompt){
   if(!responded){th.className='msg msg-a';th.textContent='Rate limited. Wait 60 seconds and try again.';}
   area.scrollTop=area.scrollHeight;
 }
-function addChat(text,role){var a=document.getElementById('bst-chat');if(!a)return;var m=document.createElement('div');m.className='msg '+(role==='user'?'msg-u':'msg-a');m.textContent=text;a.appendChild(m);a.scrollTop=a.scrollHeight;}
+
+function addChat(text,role,scaffoldType){
+  var a=document.getElementById('bst-chat');if(!a)return;
+  var m=document.createElement('div');m.className='msg '+(role==='user'?'msg-u':'msg-a');m.textContent=text;
+  a.appendChild(m);a.scrollTop=a.scrollHeight;
+  // Log student message
+  if(role==='user'){
+    var log=ensureStuLog();
+    if(log)log.turns.push({role:'user',text:text.slice(0,500),scaffold:scaffoldType||null});
+  }
+}
 
 function renderQuiz(){
   var el=document.getElementById('quiz-body'); if(!el)return;
