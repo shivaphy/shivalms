@@ -340,6 +340,10 @@ var qzData= null;   // loaded quiz
 var qzAns = {};     // quiz answers
 var bLib  = [];     // boost library
 var bShared=[];     // shared boost activities
+var bTutorCtx = {  // active tutor session context
+  topic:'', sub:'', co:'', bl:3, blLabel:'Apply',
+  ia:'', history:[]  // conversation history for scaffolding continuity
+};
 var bPDF  = '';     // PDF extracted text for boost
 var ttSec = 'BE 3rd Year - CS - A';
 
@@ -1058,7 +1062,7 @@ function saveBoost(){
 function shareBoost(){
   var c=(document.getElementById('bt-out')||{}).textContent||'';
   if(!c||c.startsWith('Configure')){toast('Generate an activity first','e');return;}
-  var act={id:Date.now()+'',topic:(document.getElementById('bt-topic')||{}).value||'Activity',sub:(document.getElementById('bt-sub')||{}).value||'',co:(document.getElementById('bt-co')||{}).value||'CO1',bl:(document.getElementById('bt-bl')||{}).value||'3',content:c,date:new Date().toLocaleDateString('en-IN'),by:CU?CU.id:'',byNm:CU?CU.nm:'Faculty',shared:true};
+  var act={id:Date.now()+'',topic:(document.getElementById('bt-topic')||{}).value||'Activity',sub:(document.getElementById('bt-sub')||{}).value||'',co:(document.getElementById('bt-co')||{}).value||'CO1',bl:(document.getElementById('bt-bl')||{}).value||'3',ia:(document.getElementById('bt-ia')||{}).value||'',content:c,date:new Date().toLocaleDateString('en-IN'),by:CU?CU.id:'',byNm:CU?CU.nm:'Faculty',shared:true};
   bShared.push(act);
   bLib.push(Object.assign({},act));
   toast('Activity shared with all students!','s',5000);
@@ -1348,10 +1352,9 @@ function renderShome(){
 
 function renderStuBoost(){
   var el=document.getElementById('stuboost-body'); if(!el)return;
-  var h='<div class="g2">'
-    +'<div style="display:flex;flex-direction:column;gap:12px">';
-
-  // Shared activities panel
+  if(!bTutorCtx.topic){bTutorCtx={topic:'',sub:'',co:'',bl:3,blLabel:'Apply',ia:'',history:[]};}
+  var blLabels=['','Remember','Understand','Apply','Analyze','Evaluate','Create'];
+  var h='<div class="g2"><div style="display:flex;flex-direction:column;gap:12px">';
   h+='<div class="card"><div class="stl">Activities Shared by Teacher</div>';
   h+='<div id="shared-acts-list">';
   if(!bShared.length){
@@ -1361,48 +1364,48 @@ function renderStuBoost(){
       h+='<div style="border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--s2)">';
       h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">';
       h+='<div><div style="font-size:13px;font-weight:600">'+a.topic+'</div>';
-      h+='<div style="font-size:11px;color:var(--mx)">'+a.sub+' | CO:'+a.co+' | L'+a.bl+' | By '+a.byNm+'</div></div>';
+      h+='<div style="font-size:11px;color:var(--mx)">'+a.sub+' | '+a.co+' | L'+a.bl+' | By '+a.byNm+'</div></div>';
       h+='<button class="btn btn-p btn-sm" id="open-act-'+i+'">Open</button></div>';
       h+='<div style="font-size:12px;color:var(--mx)">'+a.content.slice(0,180)+'...</div></div>';
     });
   }
   h+='</div></div>';
-
-  // Current assignment
-  h+='<div class="card"><div class="stl">My Work Area</div>'
-    +'<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:10px;margin-bottom:10px">'
-    +'<div style="font-size:13px;font-weight:600;color:#15803D">Digital Electronics   IA-1</div>'
-    +'<div style="font-size:11px;color:#166534">CO1: Explain Logic Gates and Boolean Algebra. Bloom L3 Apply.</div></div>'
-    +'<div class="fg"><label>Your Writing</label><textarea id="bw" style="min-height:150px" placeholder="Start writing here. Use scaffold buttons to get guidance."></textarea></div>'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
-    +'<button class="btn btn-o btn-sm" onclick="boostCheck()">Check My Work</button>'
-    +'<button class="btn btn-p btn-sm" onclick="boostFeedback()">Get Feedback</button>'
-    +'</div></div>'
-
-    +'<div class="card"><div class="stl">Scaffold Level</div><div style="display:flex;flex-direction:column;gap:7px">';
-  [['hint','L1-L2','HINT','I need a nudge','#EFF6FF','#BFDBFE','#1D4ED8','&#x1F4A1;'],
-   ['build','L3-L4','BUILD','Give me a framework','#F5F3FF','#DDD6FE','#6D28D9','&#x1F528;'],
-   ['check','L4-L5','CHECK','Review my work','#F0FDF4','#BBF7D0','#15803D','&#x2705;'],
-   ['extend','L5-L6','EXTEND','Extra challenge','#FFFBEB','#FDE68A','#92400E','&#x1F680;']
+  var hasCtx=bTutorCtx.topic;
+  var bl=bTutorCtx.bl||3;
+  var topicLine=hasCtx?(bTutorCtx.sub+(bTutorCtx.ia?' \u00a0'+bTutorCtx.ia:'')):'<span style="color:#6B7280;font-style:italic">No topic loaded \u2014 open an activity above</span>';
+  var coLine=hasCtx?(bTutorCtx.co+' | Bloom L'+bl+' '+blLabels[bl]+' \u2014 '+bTutorCtx.topic):'Select or wait for your teacher to share an activity.';
+  h+='<div class="card"><div class="stl">My Work Area</div>';
+  h+='<div id="work-area-topic" style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:10px;margin-bottom:10px">';
+  h+='<div style="font-size:13px;font-weight:600;color:#15803D">'+topicLine+'</div>';
+  h+='<div style="font-size:11px;color:#166534" id="work-area-co">'+coLine+'</div></div>';
+  h+='<div class="fg"><label>Your Response</label><textarea id="bw" style="min-height:150px" placeholder="Start writing your response here. Use the scaffold buttons to get step-by-step guidance from the AI Tutor."></textarea></div>';
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
+  h+='<button class="btn btn-o btn-sm" onclick="boostCheck()">\u2705 Check My Work</button>';
+  h+='<button class="btn btn-p btn-sm" onclick="boostFeedback()">\u2b50 Get Feedback</button>';
+  h+='</div></div>';
+  h+='<div class="card"><div class="stl">Scaffold Level</div><div style="display:flex;flex-direction:column;gap:7px">';
+  [['hint','L1-L2','HINT','When stuck \u2014 get thinking prompts','#EFF6FF','#BFDBFE','#1D4ED8','\ud83d\udca1'],
+   ['build','L3-L4','BUILD','Need a framework to structure your answer','#F5F3FF','#DDD6FE','#6D28D9','\ud83d\udd28'],
+   ['check','L4-L5','CHECK','Review what I have written so far','#F0FDF4','#BBF7D0','#15803D','\u2705'],
+   ['extend','L5-L6','EXTEND','Ready for an extra challenge','#FFFBEB','#FDE68A','#92400E','\ud83d\ude80']
   ].forEach(function(s){
-    h+='<button onclick="boostScaffold(\''+s[0]+'\')" style="display:flex;align-items:center;gap:12px;padding:10px;background:'+s[4]+';border:1.5px solid '+s[5]+';border-radius:9px;cursor:pointer;width:100%;text-align:left;font-family:inherit"><span style="font-size:20px">'+s[7]+'</span><div><div style="font-size:13px;font-weight:600;color:'+s[6]+'">'+s[2]+' ('+s[1]+')</div><div style="font-size:11px;color:'+s[6]+'">'+s[3]+'</div></div></button>';
+    h+='<button onclick="boostScaffold(\''+s[0]+'\')" style="display:flex;align-items:center;gap:12px;padding:10px;background:'+s[4]+';border:1.5px solid '+s[5]+';border-radius:9px;cursor:pointer;width:100%;text-align:left;font-family:inherit">';
+    h+='<span style="font-size:20px">'+s[7]+'</span><div>';
+    h+='<div style="font-size:13px;font-weight:600;color:'+s[6]+'">'+s[2]+' ('+s[1]+')</div>';
+    h+='<div style="font-size:11px;color:'+s[6]+'">'+s[3]+'</div></div></button>';
   });
   h+='</div></div></div>';
-
-  // Chat
-  h+='<div class="card" style="display:flex;flex-direction:column">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
-    +'<div style="width:34px;height:34px;background:#1E40AF;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px">&#x1F916;</div>'
-    +'<div><div style="font-size:13px;font-weight:600">Brisk Boost AI Tutor</div><div style="font-size:11px;color:var(--mx)">Responds at your scaffold level</div></div></div>'
-    +'<div class="chat-box" id="bst-chat" style="flex:1;min-height:300px">'
-    +'<div class="msg msg-a">Hello! I am your Brisk Boost AI Tutor.\n\nClick a scaffold button for guided help, or type any question below.\n\nHINT   when stuck\nBUILD   need a structure\nCHECK   review work\nEXTEND   extra challenge</div>'
-    +'</div>'
-    +'<div class="chat-row"><input id="bst-inp" placeholder="Ask anything..." onkeypress="if(event.key===\'Enter\')boostSend()"/><button class="btn btn-p btn-sm" onclick="boostSend()">Send</button></div>'
-    +'</div></div>';
-
+  var greeting=hasCtx?'Hello! I am your Brisk Boost AI Tutor.\n\nWe are working on: '+bTutorCtx.co+' \u2014 '+bTutorCtx.topic+'\nTarget: Bloom L'+bl+' ('+blLabels[bl]+')\n\nUse the scaffold buttons, or type your response below and I will guide you step by step!':'Hello! I am your Brisk Boost AI Tutor.\n\nOpen an activity from the list above to load your topic, or type a question and I will help you.';
+  h+='<div class="card" style="display:flex;flex-direction:column">';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">';
+  h+='<div style="width:34px;height:34px;background:#1E40AF;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px">&#x1F916;</div>';
+  h+='<div><div style="font-size:13px;font-weight:600">Brisk Boost AI Tutor</div>';
+  h+='<div style="font-size:11px;color:var(--mx)" id="tutor-status">'+(hasCtx?'Active topic: '+bTutorCtx.topic:'Waiting for topic \u2014 open an activity to begin')+'</div></div></div>';
+  h+='<div class="chat-box" id="bst-chat" style="flex:1;min-height:300px">';
+  h+='<div class="msg msg-a">'+greeting+'</div></div>';
+  h+='<div class="chat-row"><input id="bst-inp" placeholder="Type your answer or question..." onkeypress="if(event.key===\'Enter\')boostSend()"/><button class="btn btn-p btn-sm" onclick="boostSend()">Send</button></div>';
+  h+='</div></div>';
   el.innerHTML=h;
-
-  // Wire up open activity buttons safely (after innerHTML is set)
   bShared.forEach(function(a,i){
     var btn=document.getElementById('open-act-'+i);
     if(btn)(function(act){btn.onclick=function(){openSharedAct(act);};})(a);
@@ -1410,35 +1413,95 @@ function renderStuBoost(){
 }
 
 function openSharedAct(act){
-  var panel=document.getElementById('shared-acts-list');
-  if(!panel)return;
-  var h='<button class="btn btn-o btn-sm" onclick="renderStuBoost()">Back to List</button>';
+  var blLabels=['','Remember','Understand','Apply','Analyze','Evaluate','Create'];
+  var blNum=parseInt(act.bl)||3;
+  bTutorCtx={topic:act.topic,sub:act.sub||'',co:act.co||'CO1',bl:blNum,blLabel:blLabels[blNum]||'Apply',ia:act.ia||'',history:[]};
+  var panel=document.getElementById('shared-acts-list'); if(!panel)return;
+  var h='<button class="btn btn-o btn-sm" onclick="renderStuBoost()">\u2190 Back to List</button>';
   h+='<div style="margin:10px 0 6px;font-size:13px;font-weight:600">'+act.topic+'</div>';
-  h+='<div style="font-size:12px;color:var(--mx);margin-bottom:10px">'+act.sub+' | CO:'+act.co+' | Bloom L'+act.bl+' | Shared by '+act.byNm+'</div>';
-  h+='<div style="background:var(--sf);border:1px solid var(--bd);border-radius:9px;padding:12px;font-size:12px;line-height:1.7;max-height:380px;overflow-y:auto" id="shared-act-body"></div>';
-  h+='<div style="margin-top:10px"><button class="btn btn-p btn-sm" id="start-writing-btn">Start Writing</button></div>';
+  h+='<div style="font-size:12px;color:var(--mx);margin-bottom:10px">'+act.sub+' | '+act.co+' | Bloom L'+blNum+' '+blLabels[blNum]+' | Shared by '+act.byNm+'</div>';
+  h+='<div style="background:var(--sf);border:1px solid var(--bd);border-radius:9px;padding:12px;font-size:12px;line-height:1.7;max-height:340px;overflow-y:auto" id="shared-act-body"></div>';
+  h+='<div style="margin-top:10px"><button class="btn btn-p btn-sm" id="start-writing-btn">\u270f Start Writing</button></div>';
   panel.innerHTML=h;
-  var body=document.getElementById('shared-act-body');
-  if(body)body.textContent=act.content;
+  var body=document.getElementById('shared-act-body'); if(body)body.textContent=act.content;
+  var tEl=document.getElementById('work-area-topic');
+  if(tEl){tEl.innerHTML='<div style="font-size:13px;font-weight:600;color:#15803D">'+(act.sub+(act.ia?' \u00a0'+act.ia:''))+'</div><div style="font-size:11px;color:#166534">'+act.co+' | Bloom L'+blNum+' '+blLabels[blNum]+' \u2014 '+act.topic+'</div>';}
+  var tsEl=document.getElementById('tutor-status'); if(tsEl)tsEl.textContent='Active topic: '+act.topic;
+  var chat=document.getElementById('bst-chat');
+  if(chat){var m=document.createElement('div');m.className='msg msg-a';m.textContent='Topic loaded: '+act.co+' \u2014 '+act.topic+'\nBloom Target: L'+blNum+' ('+blLabels[blNum]+')\n\nRead the activity above, then write your response. Click HINT for a nudge, BUILD for a structure, or just start typing!';chat.appendChild(m);chat.scrollTop=chat.scrollHeight;}
   var btn=document.getElementById('start-writing-btn');
-  if(btn)btn.onclick=function(){var bw=document.getElementById('bw');if(bw){bw.value='Working on: '+act.topic+'\n\n';bw.focus();}};
+  if(btn)btn.onclick=function(){var bw=document.getElementById('bw');if(bw){bw.value='';bw.placeholder='Write your response on: '+act.topic+'\n\n';bw.focus();}};
+}
+
+function buildTutorSystemPrompt(){
+  var blLabels=['','Remember','Understand','Apply','Analyze','Evaluate','Create'];
+  var bl=bTutorCtx.bl||3;
+  var topic=bTutorCtx.topic||'the assigned topic';
+  var sub=bTutorCtx.sub||'the subject';
+  var co=bTutorCtx.co||'CO1';
+  var ia=bTutorCtx.ia||'';
+  return 'You are the Brisk Boost AI Tutor \u2014 a Socratic, scaffolding-focused educator for engineering students.\nCURRENT TOPIC: '+topic+'\nSUBJECT: '+sub+(ia?' | Assessment: '+ia:'')+'\nLEARNING OUTCOME: '+co+'\nBLOOM TARGET: L'+bl+' \u2014 '+blLabels[bl]+'\n\nTUTOR RULES:\n1. NEVER give the full answer directly. Always scaffold thinking.\n2. Gauge the student\'s knowledge from their writing and adapt your depth.\n3. If the student shows L1-L2 (basic recall), use simpler language and guiding questions.\n4. If the student shows L3-L4 (applying/analyzing), push deeper with probing questions.\n5. Always end your response with 1 follow-up question to keep the discussion going.\n6. Responses must be concise, warm, and encouraging.\n7. Use plain English. Avoid jargon unless the student uses it first.\n8. Keep responses under 200 words unless a table or structured breakdown is needed.\n';
+}
+
+function buildHistoryContext(){
+  if(!bTutorCtx.history||!bTutorCtx.history.length)return '';
+  var h='\n\nCONVERSATION SO FAR:\n';
+  bTutorCtx.history.slice(-6).forEach(function(m){h+=(m.role==='user'?'Student: ':'Tutor: ')+m.text+'\n';});
+  return h;
 }
 
 function boostScaffold(type){
   var work=(document.getElementById('bw')||{}).value||'';
-  var prompts={
-    hint:'Brisk Boost AI Tutor. HINT scaffold (Bloom L1-L2).\nStudent work: "'+(work.slice(0,300)||'not started yet')+'"\n4 guided thinking prompts. Do NOT give the answer. Use sentence starters. Plain English.',
-    build:'Brisk Boost AI Tutor. BUILD scaffold (Bloom L3-L4).\n5 numbered steps with sentence starters. One partial example. Plain English.',
-    check:'Brisk Boost AI Tutor. CHECK scaffold (Bloom L4-L5).\nStudent work: "'+(work.slice(0,400)||'nothing yet')+'"\n5-item checklist (Yes/No/Partly) and 3 Socratic questions. Plain English.',
-    extend:'Brisk Boost AI Tutor. EXTEND scaffold (Bloom L5-L6).\nOne real-world challenge task for engineering students. What, why, how to present. Plain English.'
+  var blLabels=['','Remember','Understand','Apply','Analyze','Evaluate','Create'];
+  var bl=bTutorCtx.bl||3;
+  var topic=bTutorCtx.topic||'the assigned topic';
+  var sub=bTutorCtx.sub||'this subject';
+  var co=bTutorCtx.co||'CO1';
+  var sys=buildTutorSystemPrompt();
+  var hist=buildHistoryContext();
+  var workCtx=work.trim()?('\n\nSTUDENT\'S CURRENT WRITING:\n\"'+work.slice(0,500)+'\"'):'';
+  var scaffoldInstructions={
+    hint:sys+hist+workCtx+'\n\nSCAFFOLD TYPE: HINT (Bloom L1-L2)\nGive 3-4 guided thinking questions. Do NOT give the answer. Start with "What do you already know about..." prompts. If the student has written something, acknowledge it first. End with an encouraging nudge.',
+    build:sys+hist+workCtx+'\n\nSCAFFOLD TYPE: BUILD (Bloom L3-L4)\nProvide a clear 4-5 step framework to structure the student\'s response on "'+topic+'". Each step should have a sentence starter. Give ONE partial example. Adjust complexity to Bloom L'+bl+'. End with: What will be your first step?',
+    check:sys+hist+workCtx+'\n\nSCAFFOLD TYPE: CHECK (Bloom L4-L5)\nIf the student has written something: give a 4-item checklist (\u2705/\u26a0\ufe0f/\u274c) assessing their work against '+co+' at Bloom L'+bl+'. Then ask 2 Socratic questions to deepen their thinking. If nothing written: ask them to share their first attempt before checking.',
+    extend:sys+hist+workCtx+'\n\nSCAFFOLD TYPE: EXTEND (Bloom L5-L6)\nGive ONE real-world application challenge related to '+topic+' in '+sub+'. Explain what to do, why it matters, and how to present the solution. This should stretch beyond the standard exam answer.'
   };
-  var labels={hint:'I need a Hint',build:'Give me a BUILD framework',check:'Check my work',extend:'Give me an EXTEND challenge'};
+  var labels={hint:'\ud83d\udca1 I need a Hint',build:'\ud83d\udd28 Give me a BUILD framework',check:'\u2705 Check my work',extend:'\ud83d\ude80 Give me an EXTEND challenge'};
   addChat(labels[type],'user');
-  streamChat(prompts[type]);
+  bTutorCtx.history.push({role:'user',text:labels[type]+(work.trim()?' [with '+work.trim().split(/\s+/).length+' words written]':'')});
+  streamChat(scaffoldInstructions[type]);
 }
-function boostCheck(){var w=(document.getElementById('bw')||{}).value||'';if(!w.trim()){toast('Write something first','w');return;}addChat('Check my work','user');streamChat('Review this Logic Gates work: "'+w.slice(0,500)+'"\n1 strength, 1 improvement. Brief, plain English.');}
-function boostFeedback(){var w=(document.getElementById('bw')||{}).value||'';if(!w.trim()){toast('Write something first','w');return;}addChat('Glows and Grows feedback please','user');streamChat('Glows and Grows on Logic Gates work: "'+w.slice(0,600)+'"\nGLOWS: 2 strengths. GROWS: 2 improvements. NEXT STEP: 1 action. Brief.');}
-function boostSend(){var inp=document.getElementById('bst-inp');var m=inp?inp.value.trim():'';if(!m)return;addChat(m,'user');if(inp)inp.value='';streamChat('Helpful AI tutor for engineering student studying Digital Electronics.\nAnswer briefly in plain English: "'+m+'"');}
+
+function boostCheck(){
+  var w=(document.getElementById('bw')||{}).value||'';
+  if(!w.trim()){toast('Write something first so I can check it','w');return;}
+  addChat('Please check my work','user');
+  bTutorCtx.history.push({role:'user',text:'Checking work: '+w.slice(0,100)});
+  var sys=buildTutorSystemPrompt();
+  streamChat(sys+'\n\nThe student has written:\n\"'+w.slice(0,600)+'\"\n\nGive: 1 specific strength, 1 specific improvement, and 1 question to push their thinking further. Be brief and encouraging.');
+}
+
+function boostFeedback(){
+  var w=(document.getElementById('bw')||{}).value||'';
+  if(!w.trim()){toast('Write something first to get feedback','w');return;}
+  addChat('Glows and Grows feedback please','user');
+  bTutorCtx.history.push({role:'user',text:'Feedback request: '+w.slice(0,100)});
+  var sys=buildTutorSystemPrompt();
+  streamChat(sys+'\n\nStudent writing:\n\"'+w.slice(0,700)+'\"\n\nGlows & Grows feedback aligned to '+bTutorCtx.co+' Bloom L'+bTutorCtx.bl+':\nGLOWS: 2 specific strengths\nGROWS: 2 targeted improvements\nNEXT STEP: 1 clear action\nEnd with a question to help the student revise.');
+}
+
+function boostSend(){
+  var inp=document.getElementById('bst-inp');
+  var m=inp?inp.value.trim():''; if(!m)return;
+  addChat(m,'user'); if(inp)inp.value='';
+  bTutorCtx.history.push({role:'user',text:m});
+  var sys=buildTutorSystemPrompt();
+  var hist=buildHistoryContext();
+  var work=(document.getElementById('bw')||{}).value||'';
+  var workCtx=work.trim()?('\n\nStudent\'s current writing:\n\"'+work.slice(0,400)+'\"'):'';
+  streamChat(sys+hist+workCtx+'\n\nStudent just said: \"'+m+'\"\n\nRespond as a Socratic tutor. Guide, do not tell. End with one follow-up question.');
+}
+
 
 async function streamChat(prompt){
   var area=document.getElementById('bst-chat'); if(!area)return;
