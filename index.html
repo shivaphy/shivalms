@@ -153,24 +153,6 @@ tr:hover td{background:var(--s2)}
     </div>
     <div id="l-err" style="display:none;background:#FEF2F2;color:#DC2626;font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px"></div>
     <button class="btn btn-p" style="width:100%;justify-content:center;padding:11px;font-size:13px;margin-bottom:12px" onclick="doLogin()">Sign In</button>
-    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:10px;font-size:11px;color:#64748B">
-      <div style="font-weight:600;margin-bottom:5px">&#x1F511; Demo Credentials</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
-        <div style="background:#F5F3FF;border-radius:5px;padding:5px;cursor:pointer" onclick="fillLogin('shivuphy@gmail.com','Admin@123','admin')">
-          <div style="font-weight:600;color:#6D28D9">Admin</div>
-          <div>shivuphy@gmail.com</div><div>Admin@123</div>
-        </div>
-        <div style="background:#E0F2FE;border-radius:5px;padding:5px;cursor:pointer" onclick="fillLogin('ramesh@fac.edu','Faculty@123','faculty')">
-          <div style="font-weight:600;color:#0369A1">Faculty</div>
-          <div>ramesh@fac.edu</div><div>Faculty@123</div>
-        </div>
-        <div style="background:#DCFCE7;border-radius:5px;padding:5px;cursor:pointer" onclick="fillLogin('arjun@stu.edu','Student@123','student')">
-          <div style="font-weight:600;color:#15803D">Student</div>
-          <div>arjun@stu.edu</div><div>Student@123</div>
-        </div>
-      </div>
-      <div style="margin-top:6px;font-size:10px">Click any card to auto-fill &amp; switch portal tab</div>
-    </div>
     <div style="display:flex;justify-content:center;gap:16px;font-size:12px;flex-wrap:wrap">
       <button class="btn-gh" onclick="openModal('m-freg')">Register as Faculty</button>
       <button class="btn-gh" onclick="openModal('m-sreg')">Register as Student</button>
@@ -523,12 +505,7 @@ function pickRole(r){
   });
 }
 
-function fillLogin(em,pw,role){
-  var eEl=document.getElementById('l-em'); if(eEl){eEl.value='';eEl.value=em;}
-  var pEl=document.getElementById('l-pw'); if(pEl){pEl.type='password';pEl.value='';pEl.value=pw;}
-  pickRole(role);
-  document.getElementById('l-err').style.display='none';
-}
+
 function doLogin(){
   var em = document.getElementById('l-em').value.trim().toLowerCase();
   var pw = document.getElementById('l-pw').value.trim();
@@ -607,7 +584,7 @@ function hardReset(){
   document.getElementById('l-pw').value='';
   document.getElementById('l-err').style.display='none';
   pickRole('admin');
-  alert('Reset complete. Use the Demo Credentials cards to sign in.');
+  alert('Reset complete. Default credentials restored.');
 }
 
 function doFacReg(){
