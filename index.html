@@ -168,9 +168,10 @@ tr:hover td{background:var(--s2)}
       </div>
       <div style="margin-top:6px;font-size:10px">Click any card to auto-fill &amp; switch portal tab</div>
     </div>
-    <div style="display:flex;justify-content:center;gap:16px;font-size:12px">
+    <div style="display:flex;justify-content:center;gap:16px;font-size:12px;flex-wrap:wrap">
       <button class="btn-gh" onclick="openModal('m-freg')">Register as Faculty</button>
       <button class="btn-gh" onclick="openModal('m-sreg')">Register as Student</button>
+      <button class="btn-gh" style="color:#DC2626" onclick="hardReset()">&#x1F504; Reset App</button>
     </div>
   </div>
 </div>
@@ -392,7 +393,10 @@ var TT_DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 var TT_PERS = ['P1 8:00','P2 9:00','P3 10:15','P4 11:15','P5 1:00','P6 2:00','P7 3:15','P8 4:15'];
 
 //    Users                                                          
-// Storage version — bump this string whenever default users change to force a fresh load
+// ── USER STORE ──────────────────────────────────────────────────
+// DEFAULT_USERS are always available. Extra users added at runtime
+// are merged in. localStorage is used only as an overlay for
+// newly registered/modified users — it never replaces defaults.
 var SPL_VER = 'spl-v7';
 var DEFAULT_USERS = [
   {id:'a1',nm:'Dr. Shivkumar Math', em:'shivuphy@gmail.com',pw:'Admin@123',   role:'admin',   av:'SM',dept:'Admin',        st:'active'},
@@ -403,24 +407,41 @@ var DEFAULT_USERS = [
   {id:'s3',nm:'Ravi Patil',         em:'ravi@stu.edu',      pw:'Student@123', role:'student', av:'RP',cls:'BE 3rd Year - CS - A',roll:'3',usn:'4VV21CS003',mob:'9876543212',st:'active'}
 ];
 function loadUsers(){
+  // Always start with a fresh copy of defaults
+  var base = JSON.parse(JSON.stringify(DEFAULT_USERS));
   try{
-    // If stored version doesn't match current version, wipe stale data and use defaults
     var storedVer = localStorage.getItem('spl_ver');
-    if(storedVer !== SPL_VER){
+    // Only trust stored extras if version matches
+    if(storedVer === SPL_VER){
+      var s = localStorage.getItem('spl_u');
+      if(s){
+        var stored = JSON.parse(s);
+        if(stored && Array.isArray(stored) && stored.length){
+          // Merge: update defaults with any stored changes, append new users
+          var defaultIds = base.map(function(u){return u.id;});
+          stored.forEach(function(su){
+            if(!su.id || !su.role) return; // skip corrupt entries
+            var idx = base.findIndex ? base.findIndex(function(u){return u.id===su.id;})
+                     : (function(){for(var i=0;i<base.length;i++){if(base[i].id===su.id)return i;}return -1;})();
+            if(idx >= 0){ base[idx] = su; } // update existing
+            else { base.push(su); }          // add new user
+          });
+        }
+      }
+    } else {
+      // Version mismatch — clear stale data, keep defaults only
       localStorage.removeItem('spl_u');
       localStorage.setItem('spl_ver', SPL_VER);
-      return JSON.parse(JSON.stringify(DEFAULT_USERS));
     }
-    var s = localStorage.getItem('spl_u');
-    if(s){
-      var p = JSON.parse(s);
-      // Validate: must be array with at least one user that has a role field
-      if(p && Array.isArray(p) && p.length && p[0].role) return p;
-    }
-  }catch(e){}
-  return JSON.parse(JSON.stringify(DEFAULT_USERS));
+  }catch(e){ /* localStorage unavailable — defaults still work */ }
+  return base;
 }
-function saveU(){ try{ localStorage.setItem('spl_u',JSON.stringify(USERS)); localStorage.setItem('spl_ver',SPL_VER); }catch(e){} }
+function saveU(){
+  try{
+    localStorage.setItem('spl_u', JSON.stringify(USERS));
+    localStorage.setItem('spl_ver', SPL_VER);
+  }catch(e){}
+}
 var USERS = loadUsers();
 
 function getK(){ return window._GK || (function(){try{return localStorage.getItem('spl_gk')||'';}catch(e){return '';}}()); }
@@ -554,6 +575,21 @@ function doLogout(){
   document.getElementById('l-pw').value='';
   document.getElementById('l-err').style.display='none';
   pickRole('admin');
+}
+
+function hardReset(){
+  if(!confirm('This will clear all cached data and reload with default users. Continue?')) return;
+  try{
+    localStorage.removeItem('spl_u');
+    localStorage.removeItem('spl_ver');
+    localStorage.removeItem('spl_gk');
+  }catch(e){}
+  USERS = JSON.parse(JSON.stringify(DEFAULT_USERS));
+  document.getElementById('l-em').value='';
+  document.getElementById('l-pw').value='';
+  document.getElementById('l-err').style.display='none';
+  pickRole('admin');
+  alert('Reset complete. Use the Demo Credentials cards to sign in.');
 }
 
 function doFacReg(){
@@ -1981,6 +2017,14 @@ function makePDF(title, content){
 //    INIT                                                           
 (function(){
   // Load saved Gemini key
+  // Clear any stale user cache from previous app versions on first load
+  try{
+    if(localStorage.getItem('spl_ver') !== SPL_VER){
+      localStorage.removeItem('spl_u');
+      localStorage.setItem('spl_ver', SPL_VER);
+      USERS = JSON.parse(JSON.stringify(DEFAULT_USERS));
+    }
+  }catch(e){}
   try{var k=localStorage.getItem('spl_gk');if(k&&k.indexOf('AIzaSy')===0)window._GK=k;}catch(e){}
   // Set initial role button state
   pickRole('admin');
