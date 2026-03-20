@@ -231,7 +231,9 @@ tr:hover td{background:var(--s2)}
       &#x1F4D0; <b>Pattern:</b> Each Q has sub-questions (a)(b)(c) with max marks. Enter marks per sub-question — totals auto-calculate. All COs, POs, Bloom levels and PIs are pre-mapped.
     </div>
     <div style="overflow-x:auto;max-height:420px;overflow-y:auto"><table id="ia-tbl" style="width:100%;border-collapse:collapse;font-size:11px"></table></div>
-    <div class="modal-ft">
+    <div class="modal-ft" style="flex-wrap:wrap;gap:6px">
+      <button class="btn btn-g btn-sm" onclick="dlIATemplate()">&#x1F4E5; Download Excel Template</button>
+      <label class="btn btn-o btn-sm" style="cursor:pointer">&#x1F4E4; Import Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importIAExcel(this)"/></label>
       <button class="btn btn-p btn-sm" onclick="saveIA()">&#x1F4BE; Save Marks</button>
       <button class="btn btn-o btn-sm" onclick="exportIAPDF()">&#x1F4CB; PDF</button>
     </div>
@@ -371,12 +373,113 @@ var bPDF  = '';     // PDF extracted text for boost
 var ttSec = 'BE 3rd Year - CS - A';
 
 var NBA_POs = [
-  {id:'PO1',l:'Engineering Knowledge'},{id:'PO2',l:'Problem Analysis'},
-  {id:'PO3',l:'Design/Development'},{id:'PO4',l:'Investigations'},
-  {id:'PO5',l:'Modern Tools'},{id:'PO6',l:'Engineer & Society'},
-  {id:'PO7',l:'Environment'},{id:'PO8',l:'Ethics'},
-  {id:'PO9',l:'Teamwork'},{id:'PO10',l:'Communication'},{id:'PO11',l:'Project Mgmt'}
+  {id:'PO1', l:'Engineering Knowledge'},
+  {id:'PO2', l:'Problem Analysis'},
+  {id:'PO3', l:'Design/Development of Solutions'},
+  {id:'PO4', l:'Conduct Investigations of Complex Problems'},
+  {id:'PO5', l:'Modern Tool Usage'},
+  {id:'PO6', l:'The Engineer and Society'},
+  {id:'PO7', l:'Environment and Sustainability'},
+  {id:'PO8', l:'Ethics'},
+  {id:'PO9', l:'Individual and Team Work'},
+  {id:'PO10',l:'Communication'},
+  {id:'PO11',l:'Project Management and Finance'},
+  {id:'PO12',l:'Life-long Learning'},
+  {id:'PSO1',l:'Programme Specific Outcome 1'},
+  {id:'PSO2',l:'Programme Specific Outcome 2'}
 ];
+
+// NBA Performance Indicators — mapped to each PO per NBA Tier-I documentation
+var NBA_PIs = {
+  PO1:[
+    {id:'1.1.1',l:'Ability to recall/identify relevant mathematical & scientific concepts'},
+    {id:'1.1.2',l:'Ability to apply mathematical/scientific principles to engineering problems'},
+    {id:'1.2.1',l:'Ability to explain the underlying engineering principles'},
+    {id:'1.2.2',l:'Ability to apply engineering principles to solve given problems'},
+    {id:'1.3.1',l:'Ability to select appropriate engineering knowledge for problem solving'},
+    {id:'1.3.2',l:'Ability to analyse engineering problems using domain knowledge'}
+  ],
+  PO2:[
+    {id:'2.1.1',l:'Ability to identify and formulate engineering problems'},
+    {id:'2.1.2',l:'Ability to identify relevant data/information for the problem'},
+    {id:'2.2.1',l:'Ability to apply problem analysis techniques'},
+    {id:'2.2.2',l:'Ability to synthesise information and draw inferences'},
+    {id:'2.3.1',l:'Ability to validate and interpret results of problem analysis'},
+    {id:'2.3.2',l:'Ability to propose solutions based on analysis'}
+  ],
+  PO3:[
+    {id:'3.1.1',l:'Ability to understand design requirements and constraints'},
+    {id:'3.1.2',l:'Ability to generate alternative design solutions'},
+    {id:'3.2.1',l:'Ability to evaluate design alternatives using appropriate criteria'},
+    {id:'3.2.2',l:'Ability to develop detailed engineering designs'},
+    {id:'3.3.1',l:'Ability to implement and test the designed solution'},
+    {id:'3.3.2',l:'Ability to document design process and results'}
+  ],
+  PO4:[
+    {id:'4.1.1',l:'Ability to plan experimental/simulation studies'},
+    {id:'4.1.2',l:'Ability to conduct experiments following standard procedures'},
+    {id:'4.2.1',l:'Ability to analyse and interpret experimental data'},
+    {id:'4.2.2',l:'Ability to draw valid conclusions from experimental results'},
+    {id:'4.3.1',l:'Ability to identify sources of error and uncertainty'},
+    {id:'4.3.2',l:'Ability to write comprehensive investigation reports'}
+  ],
+  PO5:[
+    {id:'5.1.1',l:'Ability to identify appropriate modern tools for engineering tasks'},
+    {id:'5.1.2',l:'Ability to use simulation/modelling tools effectively'},
+    {id:'5.2.1',l:'Ability to apply CAD/CAM/software tools to engineering problems'},
+    {id:'5.2.2',l:'Ability to interpret results obtained from modern tools'},
+    {id:'5.3.1',l:'Ability to understand the limitations of modern tools'}
+  ],
+  PO6:[
+    {id:'6.1.1',l:'Ability to assess societal impact of engineering solutions'},
+    {id:'6.1.2',l:'Ability to understand health and safety aspects'},
+    {id:'6.2.1',l:'Ability to evaluate legal and cultural considerations'},
+    {id:'6.2.2',l:'Ability to address diverse societal needs in design'}
+  ],
+  PO7:[
+    {id:'7.1.1',l:'Ability to understand environmental impact of engineering activities'},
+    {id:'7.1.2',l:'Ability to propose environment-friendly engineering solutions'},
+    {id:'7.2.1',l:'Ability to evaluate sustainability of engineering solutions'},
+    {id:'7.2.2',l:'Ability to apply principles of sustainable development'}
+  ],
+  PO8:[
+    {id:'8.1.1',l:'Ability to demonstrate commitment to professional ethics'},
+    {id:'8.1.2',l:'Ability to recognise ethical issues in engineering practice'},
+    {id:'8.2.1',l:'Ability to take responsibility for professional obligations'}
+  ],
+  PO9:[
+    {id:'9.1.1',l:'Ability to work effectively as an individual in project tasks'},
+    {id:'9.1.2',l:'Ability to contribute effectively in team activities'},
+    {id:'9.2.1',l:'Ability to lead and manage team activities'},
+    {id:'9.2.2',l:'Ability to resolve conflicts in team settings'}
+  ],
+  PO10:[
+    {id:'10.1.1',l:'Ability to write effective technical reports and documentation'},
+    {id:'10.1.2',l:'Ability to make effective oral/visual presentations'},
+    {id:'10.2.1',l:'Ability to communicate technical information to non-technical audiences'},
+    {id:'10.2.2',l:'Ability to use communication tools and technologies effectively'}
+  ],
+  PO11:[
+    {id:'11.1.1',l:'Ability to apply project management principles to engineering projects'},
+    {id:'11.1.2',l:'Ability to estimate costs and manage project resources'},
+    {id:'11.2.1',l:'Ability to manage risks in engineering projects'},
+    {id:'11.2.2',l:'Ability to apply financial principles to engineering decisions'}
+  ],
+  PO12:[
+    {id:'12.1.1',l:'Ability to identify own learning needs and engage in self-directed learning'},
+    {id:'12.1.2',l:'Ability to adapt to new developments in engineering'},
+    {id:'12.2.1',l:'Ability to apply knowledge from non-traditional sources to engineering'}
+  ],
+  PSO1:[
+    {id:'PSO1.1',l:'Ability to apply domain-specific knowledge to solve core programme problems'},
+    {id:'PSO1.2',l:'Ability to design and implement programme-specific solutions'}
+  ],
+  PSO2:[
+    {id:'PSO2.1',l:'Ability to use programme-specific tools and techniques'},
+    {id:'PSO2.2',l:'Ability to integrate multiple domains within the programme'}
+  ]
+};
+
 var TT_DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 var TT_PERS = ['P1 8:00','P2 9:00','P3 10:15','P4 11:15','P5 1:00','P6 2:00','P7 3:15','P8 4:15'];
 
@@ -1005,6 +1108,16 @@ async function genContent(){
 }
 function saveGen(){var c=(document.getElementById('gen-out')||{}).textContent||'';if(!c||c==='Fill the form and click Generate.'){toast('Generate first','e');return;}toast('Saved!','s');}
 function expGen(){var t=(document.getElementById('gen-topic')||{}).value||'Content';makePDF(t,(document.getElementById('gen-out')||{}).textContent||'');}
+function updateQPPIs(){
+  var poSel=document.getElementById('qp-po');
+  var piSel=document.getElementById('qp-pi');
+  if(!poSel||!piSel)return;
+  var pis=NBA_PIs[poSel.value]||[];
+  piSel.innerHTML=pis.map(function(pi){
+    return '<option value="'+pi.id+'">'+pi.id+' — '+pi.l+'</option>';
+  }).join('');
+}
+
 function updateQPSem(){
   var pr=(document.getElementById('qp-pr')||{}).value||'B.E.';
   var sel=document.getElementById('qp-sem');
@@ -1025,9 +1138,18 @@ function renderQP(){
   h+='<div class="fr"><div class="fg"><label>Assessment</label><select id="qp-ia"><option>IA-1</option><option>IA-2</option><option>IA-3</option></select></div><div class="fg"><label>Subject</label><input id="qp-sub" placeholder="Digital Electronics"/></div></div>';
   h+='<div class="fr"><div class="fg"><label>Programme</label><select id="qp-pr" onchange="updateQPSem()"><option>B.E.</option><option>MBA</option><option>MCA</option><option>M.Tech.</option></select></div><div class="fg"><label>Semester</label><select id="qp-sem"><option>1st Semester</option><option>2nd Semester</option><option>3rd Semester</option><option>4th Semester</option><option>5th Semester</option><option>6th Semester</option><option>7th Semester</option><option>8th Semester</option></select></div></div>';
   h+='<div class="fr"><div class="fg"><label>Total Marks</label><input id="qp-marks" type="number" value="30" min="10" max="100"/></div><div class="fg"><label>Duration</label><select id="qp-dur"><option>1 Hour</option><option>1.5 Hours</option><option>2 Hours</option></select></div></div>';
-  h+='<div class="fg"><label>Question Pairs (with OR choice)</label><select id="qp-nq"><option value="3">3 Pairs — Q1/Q2, Q3/Q4, Q5/Q6</option><option value="4">4 Pairs</option><option value="5">5 Pairs</option></select></div>';
+  h+='<div class="fg"><label>Question Pairs (with OR choice)</label><select id="qp-nq"><option value="2">2 Pairs — Q1 OR Q2</option><option value="3" selected>3 Pairs — Q1 OR Q2, Q3/Q4 ... Q5/Q6</option><option value="4">4 Pairs — Q1 OR Q2, Q3/Q4 ... Q7/Q8</option><option value="5">5 Pairs — Q1 OR Q2, Q3/Q4 ... Q9/Q10</option><option value="6">6 Pairs — Q1 OR Q2, Q3/Q4 ... Q11/Q12</option><option value="7">7 Pairs — Q1 OR Q2, Q3/Q4 ... Q13/Q14</option><option value="8">8 Pairs — Q1 OR Q2, Q3/Q4 ... Q15/Q16</option><option value="9">9 Pairs — Q1 OR Q2, Q3/Q4 ... Q17/Q18</option><option value="10">10 Pairs — Q1 OR Q2, Q3/Q4 ... Q19/Q20</option></select></div>';
   h+='<div class="fg"><label>Topics / Units</label><input id="qp-topics" placeholder="Logic Gates, Boolean Algebra, Flip Flops..."/></div>';
   h+='<div class="fg"><label>CO Mapping (comma-separated)</label><input id="qp-cos" value="CO1,CO2,CO3,CO4,CO5"/></div>';
+  h+='<div class="fg"><label>PO / PI Reference (for tagging)</label>';
+  h+='<select id="qp-po" onchange="updateQPPIs()" style="margin-bottom:6px">';
+  NBA_POs.forEach(function(po){h+='<option value="'+po.id+'">'+po.id+': '+po.l+'</option>';});
+  h+='</select>';
+  h+='<select id="qp-pi" multiple style="height:90px;font-size:11px">';
+  (NBA_PIs.PO1||[]).forEach(function(pi){h+='<option value="'+pi.id+'">'+pi.id+' — '+pi.l+'</option>';});
+  h+='</select>';
+  h+='<div style="font-size:10px;color:var(--mx);margin-top:3px">Hold Ctrl/Cmd to select multiple PIs. These will be included in the paper tags.</div>';
+  h+='</div>';
   h+='<button class="btn btn-p" style="width:100%;justify-content:center" onclick="genQP()">&#x2728; Generate with AI</button></div>';
   h+='<div class="card" style="background:#EFF6FF;border:1px solid #BFDBFE">';
   h+='<div class="stl" style="color:#1D4ED8">&#x1F4D0; Exam Pattern</div>';
@@ -1055,6 +1177,12 @@ async function genQP(){
   var dur=(document.getElementById('qp-dur')||{}).value||'1 Hour';
   var topics=(document.getElementById('qp-topics')||{}).value||'All units';
   var cosRaw=(document.getElementById('qp-cos')||{}).value||'CO1,CO2,CO3';
+  // Collect selected PIs from multi-select
+  var piSel=document.getElementById('qp-pi');
+  var selectedPIs=[];
+  if(piSel){for(var pi=0;pi<piSel.options.length;pi++){if(piSel.options[pi].selected)selectedPIs.push(piSel.options[pi].value);}}
+  if(!selectedPIs.length)selectedPIs=['1.1.1','1.1.2','1.2.1','2.1.1','2.1.2','3.1.1'];
+  var poVal=(document.getElementById('qp-po')||{}).value||'PO1';
   var cos=cosRaw.split(',').map(function(c){return c.trim();}).filter(Boolean);
   var nq=parseInt((document.getElementById('qp-nq')||{}).value)||3;
   var qm=Math.round(marks/nq);
@@ -1066,14 +1194,14 @@ async function genQP(){
     var co1=cos[i%cos.length],co2=cos[(i+1)%cos.length];
     var bls=['L'+(i%6+1),'L'+((i+1)%6+1),'L'+((i+2)%6+1)];
     qpairs+='Q'+q1n+' ['+co1+'][PO:PO'+(i+1)+'][BL:'+bls[0]+'-'+blNames[i%6]+']['+qm+' M]\n';
-    qpairs+='  Q'+q1n+'(a) ['+sm1+' M]['+co1+'][BL:'+bls[0]+'][PI:'+(i+1)+'.1.1] <Write actual '+sub+' question — '+blNames[i%6]+' level>\n';
-    qpairs+='  Q'+q1n+'(b) ['+sm2+' M]['+co1+'][BL:'+bls[1]+'][PI:'+(i+1)+'.1.2] <Write actual '+sub+' question — '+blNames[(i+1)%6]+' level>\n';
-    qpairs+='  Q'+q1n+'(c) ['+sm3+' M]['+co1+'][BL:'+bls[2]+'][PI:'+(i+1)+'.1.3] <Write actual '+sub+' question — '+blNames[(i+2)%6]+' level>\n';
+    qpairs+='  Q'+q1n+'(a) ['+sm1+' M]['+co1+']['+poVal+'][BL:'+bls[0]+'][PI:'+( selectedPIs[i*3%selectedPIs.length])+'] <Write actual '+sub+' question — '+blNames[i%6]+' level>\n';
+    qpairs+='  Q'+q1n+'(b) ['+sm2+' M]['+co1+']['+poVal+'][BL:'+bls[1]+'][PI:'+(selectedPIs[(i*3+1)%selectedPIs.length])+'] <Write actual '+sub+' question — '+blNames[(i+1)%6]+' level>\n';
+    qpairs+='  Q'+q1n+'(c) ['+sm3+' M]['+co1+']['+poVal+'][BL:'+bls[2]+'][PI:'+(selectedPIs[(i*3+2)%selectedPIs.length])+'] <Write actual '+sub+' question — '+blNames[(i+2)%6]+' level>\n';
     qpairs+='\n                        ─────── OR ───────\n\n';
     qpairs+='Q'+q2n+' ['+co2+'][PO:PO'+(i+2)+'][BL:'+bls[1]+'-'+blNames[(i+1)%6]+']['+qm+' M]\n';
-    qpairs+='  Q'+q2n+'(a) ['+sm1+' M]['+co2+'][BL:'+bls[1]+'][PI:'+(i+1)+'.2.1] <Write actual '+sub+' question — '+blNames[(i+1)%6]+' level>\n';
-    qpairs+='  Q'+q2n+'(b) ['+sm2+' M]['+co2+'][BL:'+bls[2]+'][PI:'+(i+1)+'.2.2] <Write actual '+sub+' question — '+blNames[(i+2)%6]+' level>\n';
-    qpairs+='  Q'+q2n+'(c) ['+sm3+' M]['+co2+'][BL:'+bls[0]+'][PI:'+(i+1)+'.2.3] <Write actual '+sub+' question — '+blNames[i%6]+' level>\n\n';
+    qpairs+='  Q'+q2n+'(a) ['+sm1+' M]['+co2+']['+poVal+'][BL:'+bls[1]+'][PI:'+(selectedPIs[(i*3+1)%selectedPIs.length])+'] <Write actual '+sub+' question — '+blNames[(i+1)%6]+' level>\n';
+    qpairs+='  Q'+q2n+'(b) ['+sm2+' M]['+co2+']['+poVal+'][BL:'+bls[2]+'][PI:'+(selectedPIs[(i*3+2)%selectedPIs.length])+'] <Write actual '+sub+' question — '+blNames[(i+2)%6]+' level>\n';
+    qpairs+='  Q'+q2n+'(c) ['+sm3+' M]['+co2+']['+poVal+'][BL:'+bls[0]+'][PI:'+(selectedPIs[i*3%selectedPIs.length])+'] <Write actual '+sub+' question — '+blNames[i%6]+' level>\n\n';
   }
   var attTable='CO | PO | Bloom | Questions | Marks | Weightage\n';
   cos.forEach(function(c,i){attTable+=c+' | PO'+(i+1)+' | L'+(i%6+1)+' '+blNames[i%6]+' | Q'+(i*2+1)+'/Q'+(i*2+2)+' | '+qm+' | '+Math.round(qm*100/marks)+'%\n';});
@@ -1676,8 +1804,158 @@ function expIAPDF(k){
 }
 function exportIAPDF(){expIAPDF((document.getElementById('ia-num')||{}).value+'-'+((document.getElementById('ia-sub')||{}).value||''));}
 function addIARow(){}  // legacy stub — rows auto-generated from student list
-function dlIATemplate(){toast('Marks entry is student-list based — use the table directly','i');}
-function importIAExcel(){toast('Direct entry supported — Excel import coming soon','i');}
+function dlIATemplate(){
+  if(typeof XLSX==='undefined'){toast('XLSX library loading, try again','w');return;}
+  var ia=(document.getElementById('ia-num')||{}).value||'IA1';
+  var sub=(document.getElementById('ia-sub')||{}).value||'Subject';
+  var key=ia+'-'+sub;
+  var qmap=iaQMap[key]||buildDefaultQMap();
+  var stus=USERS.filter(function(u){return u.role==='student';});
+
+  // Build header rows matching the sub-question structure
+  var hdr1=['Roll No','Student Name','USN'];
+  var hdr2=['','',''];
+  var hdr3=['','',''];
+  var maxRow=['','',''];
+  var piRow=['','',''];
+  qmap.forEach(function(q){
+    q.subs.forEach(function(s){
+      hdr1.push('Q'+q.qn+'('+s.sq+')');
+      hdr2.push(s.co);
+      hdr3.push(s.bl);
+      maxRow.push('Max: '+s.maxM);
+      piRow.push('PI: '+s.pi);
+    });
+    hdr1.push('Q'+q.qn+' Sub-Total');
+    hdr2.push(q.co);
+    hdr3.push('');
+    maxRow.push(q.subs.reduce(function(a,s){return a+s.maxM;},0));
+    piRow.push('');
+  });
+  hdr1.push('TOTAL');
+  hdr2.push('');
+  hdr3.push('');
+  maxRow.push(30);
+  piRow.push('');
+
+  var rows=[
+    [ia+' Marks Entry Template — '+sub],
+    ['Instructions: Enter marks for each sub-question. Sub-totals and Total are calculated by formula.'],
+    [''],
+    hdr1, hdr2, hdr3, maxRow, piRow
+  ];
+
+  // Student rows with formulas
+  var dataStartRow = rows.length + 1; // Excel row number (1-indexed)
+  stus.forEach(function(stu,si){
+    var row=[stu.roll||'', stu.nm, stu.usn||''];
+    var col=4; // D onwards (1-indexed: A=1,B=2,C=3,D=4)
+    // For each Q: add sub-q cells, then subtotal formula
+    qmap.forEach(function(q){
+      var subStart=col;
+      q.subs.forEach(function(){row.push(0); col++;});
+      // SUM formula for this Q's sub-questions
+      var startCol=XLSX.utils.encode_col(subStart-1);
+      var endCol=XLSX.utils.encode_col(col-2);
+      var excelRow=dataStartRow+si;
+      row.push({f:'SUM('+startCol+excelRow+':'+endCol+excelRow+')'});
+      col++;
+    });
+    // Grand total formula
+    var totalCols=[];
+    var c=4;
+    qmap.forEach(function(q){c+=q.subs.length; totalCols.push(XLSX.utils.encode_col(c-1)+(dataStartRow+si)); c++;});
+    row.push({f:totalCols.join('+')});
+    rows.push(row);
+  });
+
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+  // Column widths
+  var wscols=[{wch:8},{wch:22},{wch:14}];
+  qmap.forEach(function(q){q.subs.forEach(function(){wscols.push({wch:9});});wscols.push({wch:11});});
+  wscols.push({wch:8});
+  ws['!cols']=wscols;
+  // Merge title row
+  if(!ws['!merges'])ws['!merges']=[];
+  ws['!merges'].push({s:{r:0,c:0},e:{r:0,c:hdr1.length-1}});
+  ws['!merges'].push({s:{r:1,c:0},e:{r:1,c:hdr1.length-1}});
+
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,ia+' Marks');
+
+  // Second sheet: CO-PO-Bloom mapping reference
+  var mapRows=[['CO-PO-Bloom-PI Mapping Reference for '+sub+' — '+ia],[''],
+    ['Question','Sub-Q','CO','PO','Bloom Level','PI Code','PI Description','Max Marks']];
+  qmap.forEach(function(q){
+    q.subs.forEach(function(s){
+      var piDesc='';
+      var poKey=s.pi.split('.')[0];
+      var piList=NBA_PIs['PO'+poKey]||[];
+      var piObj=piList.filter(function(p){return p.id===s.pi;})[0];
+      if(piObj)piDesc=piObj.l;
+      mapRows.push(['Q'+q.qn,'('+s.sq+')',s.co,'PO'+poKey,s.bl,s.pi,piDesc,s.maxM]);
+    });
+  });
+  var ws2=XLSX.utils.aoa_to_sheet(mapRows);
+  ws2['!cols']=[{wch:10},{wch:8},{wch:8},{wch:8},{wch:14},{wch:10},{wch:55},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws2,'CO-PO-Bloom Map');
+
+  XLSX.writeFile(wb,ia+'_'+sub.replace(/[^a-zA-Z0-9]/g,'_')+'_Marks_Template.xlsx');
+  toast('Excel template downloaded with formulas and CO-PO-Bloom mapping','s');
+}
+function importIAExcel(input){
+  var file=input&&input.files&&input.files[0]; if(!file)return;
+  if(typeof XLSX==='undefined'){toast('XLSX library loading, try again','w');return;}
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var wb=XLSX.read(e.target.result,{type:'binary'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      // Find the header row (row with 'Roll No' or 'Roll')
+      var hdrIdx=-1;
+      for(var r=0;r<data.length;r++){
+        if(data[r][0]&&String(data[r][0]).toLowerCase().indexOf('roll')===0){hdrIdx=r;break;}
+      }
+      if(hdrIdx===-1){toast('Cannot find header row in template','e');return;}
+      var hdr=data[hdrIdx];
+      var ia=(document.getElementById('ia-num')||{}).value||'IA1';
+      var sub=(document.getElementById('ia-sub')||{}).value||'Subject';
+      var key=ia+'-'+sub;
+      var qmap=iaQMap[key]||buildDefaultQMap();
+      var stus=USERS.filter(function(u){return u.role==='student';});
+      // Map column indices for sub-questions
+      var colMap={};
+      hdr.forEach(function(h,ci){
+        var m=String(h).match(/Q(\d+)\(([abc])\)/i);
+        if(m)colMap['q'+m[1]+m[2].toLowerCase()]=ci;
+      });
+      // Fill table values for each student
+      var found=0;
+      data.slice(hdrIdx+1).forEach(function(row){
+        var usn=String(row[2]||'').trim();
+        var nm=String(row[1]||'').trim();
+        if(!nm&&!usn)return;
+        var stu=stus.filter(function(s){return s.usn===usn||s.nm===nm;})[0];
+        if(!stu)return;
+        found++;
+        qmap.forEach(function(q){
+          q.subs.forEach(function(s){
+            var ci=colMap['q'+q.qn+s.sq];
+            if(ci!==undefined){
+              var el=document.getElementById('im-'+stu.id+'-q'+q.qn+'-'+s.sq);
+              if(el){el.value=parseInt(row[ci])||0;}
+            }
+          });
+          calcIARow(stu.id);
+        });
+      });
+      toast(found+' student records imported from Excel','s');
+    }catch(er){toast('Excel read error: '+er.message,'e');}
+  };
+  reader.readAsBinaryString(file);
+  if(input)input.value='';
+}
 
 // ─── DIGITAL EVALUATION ─────────────────────────────────
 var devalState={key:'',pdfData:null,pdfName:'',qmap:null,currentStu:null,facMarks:{},aiMarks:{}};
