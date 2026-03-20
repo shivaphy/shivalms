@@ -1148,15 +1148,22 @@ function renderGen(){
   // Podcast player panel (hidden until script generated)
   h+='<div class="card" id="podcast-player-card" style="display:none">';
   h+='<div class="stl">&#x1F3A7; Podcast Player</div>';
-  h+='<div style="background:#F5F3FF;border-radius:8px;padding:12px;margin-bottom:10px">';
-  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">';
-  h+='<div style="width:44px;height:44px;background:#6D28D9;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px">&#x1F3A7;</div>';
-  h+='<div><div style="font-weight:600" id="podcast-ep-title">Episode</div>';
-  h+='<div style="font-size:11px;color:var(--mx)" id="podcast-ep-meta">Ready to play</div></div></div>';
-  h+='<button class="btn btn-p" style="width:100%;justify-content:center" id="podcast-play-btn" onclick="playPodcast()">&#x25B6; Read Aloud (Browser TTS)</button>';
-  h+='<button class="btn btn-o btn-sm" style="margin-top:6px;width:100%;justify-content:center" onclick="stopPodcast()">&#x23F9; Stop</button>';
-  h+='<div style="font-size:11px;color:var(--mx);margin-top:8px;text-align:center">Uses browser Text-to-Speech. For Indian accent, ensure the selected language voice is installed on your device.</div>';
-  h+='</div></div>';
+  h+='<div style="background:#F5F3FF;border-radius:8px;padding:14px">';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">';
+  h+='<div style="width:44px;height:44px;background:#6D28D9;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;flex-shrink:0">&#x1F3A7;</div>';
+  h+='<div style="flex:1"><div style="font-weight:600;font-size:13px" id="podcast-ep-title">Episode</div>';
+  h+='<div style="font-size:11px;color:var(--mx)" id="podcast-ep-meta">Ready to synthesise</div></div></div>';
+  h+='<audio id="podcast-audio" controls style="width:100%;margin-bottom:10px;display:none"></audio>';
+  h+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
+  h+='<button class="btn btn-p" style="flex:1;justify-content:center" id="podcast-play-btn" onclick="playPodcast()">&#x1F3A4; Synthesise &amp; Play</button>';
+  h+='<button class="btn btn-o btn-sm" id="podcast-dl-btn" style="display:none" onclick="downloadPodcast()">&#x1F4E5; Download MP3</button>';
+  h+='</div>';
+  h+='<div style="margin-top:10px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:6px;padding:8px;font-size:11px;color:#7C2D12">';
+  h+='<b>&#x1F511; Powered by ElevenLabs</b> — Natural AI voices with Indian English accent.<br>';
+  h+='Free: 10,000 characters/month &bull; No credit card required. ';
+  h+='<span id="tts-key-status" style="font-weight:600">No ElevenLabs key set.</span> ';
+  h+='<button class="btn-gh" onclick="nav(\'settings\')" style="font-size:10px">&#x2699; Set in Settings</button>';
+  h+='</div></div></div>';
 
   h+='</div></div>'; // right col + g2
   el.innerHTML=h;
@@ -1332,41 +1339,172 @@ async function genContent(){
       if(epTitle)epTitle.textContent=topic+' — Podcast Episode';
       var epMeta=document.getElementById('podcast-ep-meta');
       if(epMeta)epMeta.textContent=(document.getElementById('gen-podcast-len')||{}).value+' | '+langObj2.label+' | '+(document.getElementById('gen-podcast-fmt')||{}).value;
+      updateTTSKeyStatus();
     }
   });
 }
 
-function playPodcast(){
-  if(!podcastScript){toast('Generate a podcast script first','e');return;}
-  if(!window.speechSynthesis){toast('Browser TTS not supported — try Chrome or Edge','w');return;}
-  window.speechSynthesis.cancel();
-  var langCode=(document.getElementById('gen-podcast-lang')||{}).value||'en';
-  var langObj=INDIAN_LANGS.filter(function(l){return l.code===langCode;})[0]||{label:'English'};
-  // Clean script: strip stage directions like [HOST A]: for TTS
-  var cleanText=podcastScript.replace(/\[.*?\]:/g,'').replace(/\[.*?\]/g,'');
-  var utt=new SpeechSynthesisUtterance(cleanText);
-  // Try to find a matching voice
-  var voices=window.speechSynthesis.getVoices();
-  var langMap={en:'en-IN',hi:'hi-IN',kn:'kn-IN',ta:'ta-IN',te:'te-IN',mr:'mr-IN',ml:'ml-IN',gu:'gu-IN',bn:'bn-IN',pa:'pa-IN'};
-  var targetLang=langMap[langCode]||('en-IN');
-  var voice=voices.filter(function(v){return v.lang===targetLang;})[0]
-    ||voices.filter(function(v){return v.lang.startsWith(langCode);})[0]
-    ||voices.filter(function(v){return v.lang.indexOf('IN')>-1;})[0]
-    ||null;
-  if(voice){utt.voice=voice;}
-  utt.lang=targetLang;
-  utt.rate=0.9; utt.pitch=1.0;
-  var btn=document.getElementById('podcast-play-btn');
-  if(btn)btn.textContent='&#x23F8; Playing...';
-  utt.onend=function(){if(btn)btn.textContent='&#x25B6; Read Aloud (Browser TTS)';};
-  window.speechSynthesis.speak(utt);
-  toast('Playing podcast in '+langObj.label+' — '+targetLang+' voice','s');
+// Google Cloud TTS voice map — WaveNet/Neural2 voices per language
+// ── ElevenLabs TTS ──────────────────────────────────────────
+// Voice IDs: ElevenLabs multilingual-v2 model handles all Indian languages
+// Free tier: 10,000 chars/month, no credit card needed
+// Sign up: elevenlabs.io
+
+// Curated voices that handle Indian languages well
+var EL_VOICES = {
+  default_female: 'Xb7hH8MSUJpSbSDYk0k2', // Alice — clear, warm female
+  default_male:   'TX3LPaxmHKxFdv7VOQHJ', // Liam — natural male
+  indian_female:  'cgSgspJ2msm6clMCkdW9', // Jessica — works well for Indian English
+  indian_male:    'onwK4e9ZLuTAKqWW03F9'  // Daniel — deep, clear
+};
+
+// For non-English scripts, use multilingual model
+var EL_MULTILINGUAL_MODEL = 'eleven_multilingual_v2';
+var EL_ENGLISH_MODEL       = 'eleven_turbo_v2_5';
+
+var podcastAudioBlob = null;
+
+function getTTSKey(){
+  try{ return localStorage.getItem('spl_tts_key')||''; }catch(e){ return ''; }
+}
+
+function updateTTSKeyStatus(){
+  var el = document.getElementById('tts-key-status');
+  if(!el) return;
+  var k = getTTSKey();
+  if(k && k.length > 10){
+    el.textContent = '✅ ElevenLabs key active.';
+    el.style.color = '#15803D';
+  } else {
+    el.textContent = 'No ElevenLabs key set.';
+    el.style.color = '#DC2626';
+  }
+}
+
+// Split text into chunks ≤ 2500 chars (safe ElevenLabs limit per request)
+function chunkText(text, maxLen){
+  maxLen = maxLen || 2400;
+  var chunks = [], start = 0;
+  while(start < text.length){
+    var end = Math.min(start + maxLen, text.length);
+    if(end < text.length){
+      // Break at sentence end
+      var brk = text.lastIndexOf('. ', end);
+      if(brk > start + 300) end = brk + 2;
+      else { brk = text.lastIndexOf('\n', end); if(brk > start + 100) end = brk + 1; }
+    }
+    var chunk = text.slice(start, end).trim();
+    if(chunk) chunks.push(chunk);
+    start = end;
+  }
+  return chunks;
+}
+
+async function playPodcast(){
+  if(!podcastScript){ toast('Generate a podcast script first','e'); return; }
+  var apiKey = getTTSKey();
+  if(!apiKey || apiKey.length < 10){
+    toast('Set your ElevenLabs API key in Settings to use natural voice','e');
+    nav('settings');
+    return;
+  }
+
+  var btn    = document.getElementById('podcast-play-btn');
+  var audioEl= document.getElementById('podcast-audio');
+  if(btn){ btn.disabled = true; btn.innerHTML = '&#x23F3; Synthesising...'; }
+
+  var langCode = (document.getElementById('gen-podcast-lang')||{}).value || 'en';
+  var langObj  = INDIAN_LANGS.filter(function(l){ return l.code===langCode; })[0] || {label:'English'};
+  var isEnglish= langCode === 'en';
+
+  // Pick voice — male/female toggle could be added later
+  var voiceId  = isEnglish ? EL_VOICES.indian_female : EL_VOICES.default_female;
+  var modelId  = isEnglish ? EL_ENGLISH_MODEL : EL_MULTILINGUAL_MODEL;
+
+  // Clean script: strip stage directions
+  var cleanText = podcastScript
+    .replace(/\[HOST [AB]\]:/gi, '')
+    .replace(/\[EXPERT\]:/gi, '')
+    .replace(/\[HOST\]:/gi, '')
+    .replace(/\[NARRATOR\/HOST\]:/gi, '')
+    .replace(/\[.*?\]/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  var chunks = chunkText(cleanText);
+  toast('Synthesising ' + chunks.length + ' segment(s) via ElevenLabs...', 'i');
+
+  var audioBuffers = [];
+  var failed = false;
+
+  for(var ci = 0; ci < chunks.length; ci++){
+    try{
+      var r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + voiceId, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': apiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg'
+        },
+        body: JSON.stringify({
+          text: chunks[ci],
+          model_id: modelId,
+          voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.2, use_speaker_boost: true }
+        })
+      });
+
+      if(!r.ok){
+        var errText = await r.text();
+        var errMsg = '';
+        try{ errMsg = JSON.parse(errText).detail || r.status; }catch(e){ errMsg = r.status; }
+        toast('ElevenLabs error: ' + errMsg, 'e');
+        failed = true; break;
+      }
+
+      var arrayBuf = await r.arrayBuffer();
+      audioBuffers.push(arrayBuf);
+
+    }catch(e){ toast('Network error: ' + e.message, 'e'); failed = true; break; }
+  }
+
+  if(btn){ btn.disabled = false; btn.innerHTML = '&#x1F3A4; Synthesise &amp; Play'; }
+
+  if(failed || audioBuffers.length === 0){
+    toast('Synthesis failed — check your ElevenLabs key has remaining quota','e');
+    return;
+  }
+
+  // Merge all MP3 buffers into one blob
+  var totalLen = audioBuffers.reduce(function(s,b){ return s + b.byteLength; }, 0);
+  var combined = new Uint8Array(totalLen);
+  var offset = 0;
+  audioBuffers.forEach(function(buf){ combined.set(new Uint8Array(buf), offset); offset += buf.byteLength; });
+
+  var blob = new Blob([combined], { type: 'audio/mpeg' });
+  podcastAudioBlob = blob;
+  var url = URL.createObjectURL(blob);
+
+  if(audioEl){ audioEl.src = url; audioEl.style.display = 'block'; audioEl.play(); }
+
+  var dlBtn = document.getElementById('podcast-dl-btn');
+  if(dlBtn) dlBtn.style.display = '';
+
+  toast('✅ Podcast ready in ' + langObj.label + ' — ' + (isEnglish ? 'Indian English' : 'Multilingual') + ' voice', 's', 5000);
 }
 
 function stopPodcast(){
-  if(window.speechSynthesis)window.speechSynthesis.cancel();
-  var btn=document.getElementById('podcast-play-btn');
-  if(btn)btn.textContent='&#x25B6; Read Aloud (Browser TTS)';
+  var audioEl = document.getElementById('podcast-audio');
+  if(audioEl){ audioEl.pause(); audioEl.currentTime = 0; }
+}
+
+function downloadPodcast(){
+  if(!podcastAudioBlob){ toast('Synthesise first','e'); return; }
+  var topic = (document.getElementById('gen-topic')||{}).value || 'Podcast';
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(podcastAudioBlob);
+  a.download = topic.replace(/[^a-zA-Z0-9]/g,'_') + '_podcast.mp3';
+  a.click();
+  toast('Downloading MP3...','s');
 }
 
 function saveGen(){
@@ -3053,11 +3191,31 @@ function renderSettings(){
   h+='<button class="btn btn-o btn-sm" onclick="changePwd()">Update Password</button>';
 
   if(!isStu){
-    h+='<div class="divider"></div><div class="stl">AI Configuration</div>';
+    h+='<div class="divider"></div><div class="stl">&#x1F916; AI Configuration</div>';
     h+='<div id="ai-status-box" style="padding:8px 12px;border-radius:7px;margin-bottom:10px;font-size:12px"></div>';
-    h+='<div class="fg"><label>Gemini API Key</label><input id="gem-inp" type="password" placeholder="AIzaSy..."/></div>';
+    h+='<div class="fg"><label>Gemini API Key <span style="font-size:10px;color:var(--mx)">(for AI text generation)</span></label><input id="gem-inp" type="password" placeholder="AIzaSy..."/></div>';
     h+='<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-p btn-sm" onclick="saveKey()">Save Key</button><button class="btn btn-r btn-sm" onclick="clearKey()">Clear</button><button class="btn btn-o btn-sm" onclick="testKey()">Test AI</button></div>';
-    h+='<p style="font-size:11px;color:var(--mx);margin-top:8px">Free key: aistudio.google.com/app/apikey</p>';
+    h+='<p style="font-size:11px;color:var(--mx);margin-top:6px">Free key: <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#1D4ED8">aistudio.google.com/app/apikey</a></p>';
+    h+='<div class="divider" style="margin:14px 0"></div>';
+    h+='<div class="stl">&#x1F3A7; ElevenLabs TTS Key</div>';
+    h+='<div id="tts-status-box" style="padding:8px 12px;border-radius:7px;margin-bottom:10px;font-size:12px"></div>';
+    h+='<div class="fg"><label>ElevenLabs API Key <span style="font-size:10px;color:var(--mx)">(for natural voice podcast)</span></label>';
+    h+='<input id="tts-inp" type="password" placeholder="Paste ElevenLabs API key here..."/></div>';
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
+    h+='<button class="btn btn-p btn-sm" onclick="saveTTSKey()">&#x1F4BE; Save Key</button>';
+    h+='<button class="btn btn-r btn-sm" onclick="clearTTSKey()">Clear</button>';
+    h+='</div>';
+    h+='<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px;margin-top:8px;font-size:11px;color:#7C2D12;line-height:1.9">';
+    h+='<b>&#x1F4A1; How to get your free ElevenLabs key (2 minutes, no card needed):</b><br>';
+    h+='1. Go to <a href="https://elevenlabs.io" target="_blank" style="color:#C2410C">elevenlabs.io</a> &rarr; <b>Sign Up Free</b> (Google or email)<br>';
+    h+='2. After login, look at the <b>left sidebar</b> &rarr; click <b>Developers</b> (near the bottom)<br>';
+    h+='3. Click the <b>API Keys</b> tab &rarr; click <b>Create API Key</b><br>';
+    h+='4. Name it anything (e.g. ShivaLMS) &rarr; click <b>Restrict Key toggle OFF</b> &rarr; click <b>Create Key</b><br>';
+    h+='5. <b>Copy the key immediately</b> (shown only once) &rarr; paste it above<br>';
+    h+='<span style="background:#FEF3C7;padding:2px 6px;border-radius:4px">';
+    h+='&#x1F381; Free: <b>10,000 characters/month</b> &bull; ~7 min of audio &bull; No bank details ever</span><br>';
+    h+='<b>Voices:</b> Indian English + Hindi, Kannada, Tamil, Telugu, Marathi &amp; 8 more languages';
+    h+='</div>';
   }
   h+='</div>';
 
@@ -3069,13 +3227,39 @@ function renderSettings(){
   }
   h+='</div></div>';
   el.innerHTML=h;
-  if(!isStu) updateKeyStatus();
+  if(!isStu){ updateKeyStatus(); updateTTSStatus(); }
 }
 
 function changePwd(){var p=(document.getElementById('new-pwd')||{}).value||'';if(!p||p.length<6){toast('Min 6 chars','e');return;}var u=USERS.filter(function(x){return x.id===CU.id;})[0];if(u){u.pw=p;CU.pw=p;saveU();toast('Password updated!','s');}if(document.getElementById('new-pwd'))document.getElementById('new-pwd').value='';}
 function updateKeyStatus(){var key=getK();var box=document.getElementById('ai-status-box');if(!box)return;if(key&&key.indexOf('AIzaSy')===0){box.style.cssText='padding:8px 12px;border-radius:7px;margin-bottom:10px;font-size:12px;background:#F0FDF4;border:1px solid #BBF7D0';box.innerHTML='<b style="color:#15803D">AI Active</b>   Key: ...'+key.slice(-6);}else{box.style.cssText='padding:8px 12px;border-radius:7px;margin-bottom:10px;font-size:12px;background:#FEF2F2;border:1px solid #FECACA';box.innerHTML='<b style="color:#DC2626">No API Key</b>   Paste Gemini key below';}}
 function saveKey(){var k=(document.getElementById('gem-inp')||{}).value.trim();if(!k){toast('Enter API key','e');return;}if(k.indexOf('AIzaSy')!==0){toast('Key should start with AIzaSy','w');return;}window._GK=k;try{localStorage.setItem('spl_gk',k);}catch(e){}if(document.getElementById('gem-inp'))document.getElementById('gem-inp').value='';toast('API key saved! AI features active.','s');updateKeyStatus();}
 function clearKey(){window._GK=null;try{localStorage.removeItem('spl_gk');}catch(e){}toast('Key cleared','i');updateKeyStatus();}
+function saveTTSKey(){
+  var k=(document.getElementById('tts-inp')||{}).value.trim();
+  if(!k || k.length < 10){toast('Enter a valid ElevenLabs API key','e');return;}
+  try{localStorage.setItem('spl_tts_key',k);}catch(e){}
+  if(document.getElementById('tts-inp'))document.getElementById('tts-inp').value='';
+  toast('ElevenLabs key saved! Natural voice podcast active.','s');
+  updateTTSStatus();
+  updateTTSKeyStatus();
+}
+function clearTTSKey(){
+  try{localStorage.removeItem('spl_tts_key');}catch(e){}
+  toast('TTS key cleared','i');
+  updateTTSStatus();
+  updateTTSKeyStatus();
+}
+function updateTTSStatus(){
+  var box=document.getElementById('tts-status-box'); if(!box)return;
+  var k=getTTSKey();
+  if(k && k.length>10){
+    box.style.cssText='padding:8px 12px;border-radius:7px;margin-bottom:10px;font-size:12px;background:#F0FDF4;border:1px solid #BBF7D0';
+    box.innerHTML='<b style="color:#15803D">&#x1F3A7; ElevenLabs Active</b> &nbsp; Natural voice synthesis ready &nbsp; Key: ...'+k.slice(-6);
+  } else {
+    box.style.cssText='padding:8px 12px;border-radius:7px;margin-bottom:10px;font-size:12px;background:#FFF7ED;border:1px solid #FED7AA';
+    box.innerHTML='<b style="color:#92400E">No ElevenLabs Key</b> &nbsp; Sign up free at elevenlabs.io &mdash; no card needed';
+  }
+}
 async function testKey(){
   var key=getK();if(!key||key.indexOf('AIzaSy')!==0){toast('Save API key first','e');return;}
   toast('Testing...','i');
