@@ -3262,8 +3262,10 @@ function renderSettings(){
     h+='<div id="ai-status-box" style="padding:8px 12px;border-radius:7px;margin-bottom:10px;font-size:12px"></div>';
     h+='<div class="fg"><label>Gemini API Key <span style="font-size:10px;color:var(--mx)">(for AI text generation)</span></label><input id="gem-inp" type="password" placeholder="AIzaSy..."/></div>';
     h+='<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-p btn-sm" onclick="saveKey()">Save Key</button><button class="btn btn-r btn-sm" onclick="clearKey()">Clear</button><button class="btn btn-o btn-sm" onclick="testKey()">&#x1F50C; Test Connection</button></div>';
-
+    h+='<div id="test-key-result" style="margin-top:8px;font-size:11px;min-height:20px"></div>';
     h+='<p style="font-size:11px;color:var(--mx);margin-top:6px">Free key: <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#1D4ED8">aistudio.google.com/app/apikey</a></p>';
+
+
     h+='<div class="divider" style="margin:14px 0"></div>';
     h+='<div class="stl">&#x1F3A7; ElevenLabs TTS Key</div>';
     h+='<div id="tts-status-box" style="padding:8px 12px;border-radius:7px;margin-bottom:10px;font-size:12px"></div>';
@@ -3330,24 +3332,46 @@ function updateTTSStatus(){
 }
 async function testKey(){
   var key=getK();
-  if(!key||key.indexOf('AIzaSy')!==0){toast('Save API key first','e');return;}
-  toast('Testing all models...','i',5000);
+  var res=document.getElementById('test-key-result');
+  function showRes(msg,ok){
+    if(res)res.innerHTML='<div style="padding:8px 10px;border-radius:7px;background:'+(ok?'#F0FDF4':'#FEF2F2')+';border:1px solid '+(ok?'#BBF7D0':'#FECACA')+'">'+msg+'</div>';
+  }
+  if(!key||key.indexOf('AIzaSy')!==0){
+    showRes('&#x274C; No API key saved. Paste your Gemini key above and click Save Key.',false);
+    return;
+  }
+  showRes('&#x23F3; Testing connection to Gemini API...',true);
   for(var i=0;i<GKEYS.length;i++){
     try{
       var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GKEYS[i]+':generateContent?key='+key,{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({contents:[{parts:[{text:'Reply OK'}]}],generationConfig:{maxOutputTokens:10}})
       });
-      if(r.ok){toast('\u2705 Working! Model: '+GKEYS[i],'s',6000);return;}
-      var eb={};try{eb=await r.json();}catch(je){}
-      var gm=(eb.error&&eb.error.message)||'';
-      if(r.status===429){toast('\u26A0 '+GKEYS[i]+' rate limited, trying next...','w',3000);await new Promise(function(res){setTimeout(res,1500);});continue;}
-      // Real error — show exact message from Google
-      toast('\u274C Error '+r.status+' on '+GKEYS[i]+(gm?' \u2014 '+gm.slice(0,100):''),'e',10000);
+      if(r.ok){
+        showRes('&#x2705; <b>Connected!</b> Model <b>'+GKEYS[i]+'</b> is working. All AI features active.',true);
+        toast('\u2705 AI Connected: '+GKEYS[i],'s',4000);
+        return;
+      }
+      var eb={};
+      try{eb=await r.clone().json();}catch(je){try{eb={error:{message:await r.text()}};}catch(te){}}
+      var gm=(eb.error&&eb.error.message)||('HTTP '+r.status);
+      if(r.status===429){
+        showRes('&#x26A0; <b>'+GKEYS[i]+' rate limited.</b> Trying next model...',true);
+        await new Promise(function(res2){setTimeout(res2,1500);});
+        continue;
+      }
+      // Non-rate-limit error — this is the REAL problem
+      showRes('&#x274C; <b>Error on '+GKEYS[i]+':</b><br>'
+        +gm+'<br><br>'
+        +'<b>Fix:</b> Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#1D4ED8">aistudio.google.com/app/apikey</a>, '
+        +'create a <b>new API key</b> (unrestricted), paste it above and click Save Key.',false);
       return;
-    }catch(e){toast('Network error: '+e.message,'e',8000);return;}
+    }catch(e){
+      showRes('&#x274C; <b>Network error:</b> '+e.message+'<br>Check your internet connection.',false);
+      return;
+    }
   }
-  toast('\u26A0 All models rate limited \u2014 key is valid, wait 60s','w',6000);
+  showRes('&#x26A0; All models rate limited right now. Your key IS valid.<br>Wait 60 seconds and click Test Connection again.',true);
 }
 
 //    PDF                                                            
