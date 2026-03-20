@@ -600,17 +600,18 @@ function closeModal(id){var e=document.getElementById(id);if(e)e.classList.remov
 document.addEventListener('click',function(e){if(e.target.classList.contains('modal-wrap'))e.target.classList.remove('on');});
 
 //    Gemini AI                                                      
-async function callAI(prompt, elId, done){
+async function callAI(prompt, elId, done, _retryCount){
+  _retryCount = _retryCount || 0;
   var el=document.getElementById(elId);
   if(!el)return;
   el.innerHTML='<div class="thinking"><div class="dots"><span></span><span></span><span></span></div>&nbsp;Generating...</div>';
-  if(!navigator.onLine){el.textContent='Offline.';return;}
+  if(!navigator.onLine){el.textContent='Offline. Check your internet connection.';return;}
   var key=getK();
   if(!key||key.indexOf('AIzaSy')!==0){
     el.innerHTML='<div style="color:#DC2626">No API key. Go to Settings and save your Gemini API key.</div>';
     return;
   }
-  var err='';
+  var err=''; var rateLimited=false;
   for(var i=0;i<GKEYS.length;i++){
     try{
       var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GKEYS[i]+':generateContent?key='+key,{
@@ -622,13 +623,26 @@ async function callAI(prompt, elId, done){
         var t=d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts&&d.candidates[0].content.parts[0]?d.candidates[0].content.parts[0].text:'';
         if(t){el.textContent=t;if(done)done(t);return;}
       }
-      if(r.status===429){err='Rate limited';await new Promise(function(res){setTimeout(res,2000);});continue;}
+      if(r.status===429){
+        rateLimited=true; err='Rate limited';
+        // Stagger: wait longer between each model attempt
+        await new Promise(function(res){setTimeout(res, 3000*(i+1));});
+        continue;
+      }
       if(r.status===400||r.status===403){err='Invalid API key ('+r.status+')';break;}
-      err='Error '+r.status;
+      err='AI Error '+r.status;
     }catch(ex){err=ex.message;}
   }
-  if(err==='Rate limited'){
-    showRateLimitCountdown(el, 60);
+  if(rateLimited && _retryCount < 2){
+    // Auto-retry after countdown — up to 2 automatic retries
+    showRateLimitCountdown(el, 60, function(){
+      callAI(prompt, elId, done, _retryCount+1);
+    });
+  } else if(rateLimited){
+    el.innerHTML='<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:10px;font-size:12px;color:#DC2626">'
+      +'<b>&#x26A0; Still rate limited after 2 retries.</b><br>'
+      +'The Gemini free tier allows ~10 requests/minute. '
+      +'Please wait 2-3 minutes before generating again, or use a different Gemini API key.</div>';
   } else {
     el.innerHTML='<div style="color:#DC2626">AI Error: '+err+'</div>';
   }
@@ -3158,7 +3172,12 @@ async function streamChat(prompt,scaffoldType){
   }
   if(!responded){
     th.className='msg msg-a';
-    showRateLimitCountdown(th, 60);
+    // Auto-retry streamChat after countdown
+    showRateLimitCountdown(th, 60, function(){
+      th.className='msg msg-a thinking';
+      th.innerHTML='<div class="dots"><span></span><span></span><span></span></div>';
+      streamChat(prompt, scaffoldType);
+    });
   }
   area.scrollTop=area.scrollHeight;
 }
